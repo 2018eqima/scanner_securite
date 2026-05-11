@@ -1,0 +1,33 @@
+# scanner.eqima.org — Frontend React EQIMA Scanner
+
+server {
+    listen 80;
+    server_name scanner.eqima.org;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name scanner.eqima.org;
+
+    ssl_certificate     /etc/letsencrypt/live/scanner.eqima.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/scanner.eqima.org/privkey.pem;
+    include             /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
+
+    root  /home/mreric/scanner/frontend;
+    index index.html;
+
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml;
+
+    # SPA fallback
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location ~* \.(js|css|png|jpg|svg|ico|woff2?)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}
