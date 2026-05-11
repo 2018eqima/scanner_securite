@@ -34,6 +34,12 @@ public class ScanSession {
     private Integer progress = 0;
     private Integer totalFindings = 0;
 
+    @Column(length = 8)
+    private String sslGrade;
+
+    @Column(columnDefinition = "TEXT")
+    private String sslData; // JSON complet SSL Labs
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
 
@@ -66,4 +72,10 @@ public class ScanSession {
 
     public Integer getTotalFindings() { return totalFindings; }
     public void setTotalFindings(Integer totalFindings) { this.totalFindings = totalFindings; }
+
+    public String getSslGrade() { return sslGrade; }
+    public void setSslGrade(String sslGrade) { this.sslGrade = sslGrade; }
+
+    public String getSslData() { return sslData; }
+    public void setSslData(String sslData) { this.sslData = sslData; }
 }

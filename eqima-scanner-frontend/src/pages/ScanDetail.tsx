@@ -6,6 +6,7 @@ import { useScanEvents } from '../hooks/useScanEvents'
 import { StatusBadge } from '../components/StatusBadge'
 import { SeverityBadge } from '../components/SeverityBadge'
 import { ProgressBar } from '../components/ProgressBar'
+import { SslCard } from '../components/SslCard'
 import { Finding, Severity } from '../types'
 import {
   ArrowLeft, Download, Radio, Terminal, AlertTriangle,
@@ -126,6 +127,11 @@ export function ScanDetail() {
             }
           </div>
         </div>
+      )}
+
+      {/* SSL */}
+      {session.status === 'COMPLETED' && (
+        <SslCard sslGrade={session.sslGrade} sslData={session.sslData} />
       )}
 
       {/* Findings */}

@@ -9,6 +9,20 @@ export interface Target {
   modules: string[]
 }
 
+export interface SslData {
+  host: string
+  grade: string
+  ipAddress: string
+  hasWarnings: boolean
+  certSubject: string
+  certIssuer: string
+  certExpiry?: string
+  certValidFrom?: string
+  protocols: string[]
+  vulnerabilities: string[]
+  forwardSecrecy: boolean
+}
+
 export interface ScanSession {
   id: string
   targetId: string
@@ -19,6 +33,8 @@ export interface ScanSession {
   completedAt?: string
   progress: number
   totalFindings: number
+  sslGrade?: string
+  sslData?: string  // JSON string → parse vers SslData
 }
 
 export interface Finding {

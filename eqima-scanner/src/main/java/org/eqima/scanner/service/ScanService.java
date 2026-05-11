@@ -31,16 +31,19 @@ public class ScanService {
     private final ScanSessionRepository sessionRepo;
     private final FindingRepository findingRepo;
     private final ZapService zapService;
+    private final SslService sslService;
 
     // Sinks actifs par sessionId — supprimés à la fin du scan
     private final Map<String, Sinks.Many<ScanEvent>> activeSinks = new ConcurrentHashMap<>();
 
     public ScanService(ScanSessionRepository sessionRepo,
                        FindingRepository findingRepo,
-                       ZapService zapService) {
+                       ZapService zapService,
+                       SslService sslService) {
         this.sessionRepo = sessionRepo;
         this.findingRepo = findingRepo;
         this.zapService = zapService;
+        this.sslService = sslService;
     }
 
     public Mono<ScanSession> startScan(StartScanRequest request) {
@@ -137,6 +140,24 @@ public class ScanService {
 
             pollProgress(scanId, "SCAN_PROGRESS", session, sink,
                     (id) -> zapService.getScanProgress(id).block());
+
+            // ── Analyse SSL ───────────────────────────────────────────────────
+            if (url.startsWith("https://")) {
+                emit(sink, session.getId(), "SCAN_PROGRESS", "Analyse SSL/TLS en cours...", 90);
+                String sslData = sslService.analyze(url);
+                if (sslData != null) {
+                    try {
+                        com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+                        String grade = om.readTree(sslData).path("grade").asText("");
+                        session.setSslGrade(grade);
+                        session.setSslData(sslData);
+                        sessionRepo.save(session);
+                        emit(sink, session.getId(), "SSL_DONE", "SSL analysé — Grade : " + grade, 93);
+                    } catch (Exception e) {
+                        log.warn("Erreur parsing SSL data : {}", e.getMessage());
+                    }
+                }
+            }
 
             // ── Collecte des alertes ──────────────────────────────────────────
             emit(sink, session.getId(), "SCAN_PROGRESS", "Collecte des findings...", 95);
