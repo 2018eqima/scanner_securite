@@ -23,7 +23,10 @@ export function ScanDetail() {
   const { data: session, isLoading } = useQuery({
     queryKey: ['scans', id],
     queryFn: () => scanApi.get(id!),
-    refetchInterval: (q) => q.state.data?.status === 'RUNNING' ? 3000 : false,
+    refetchInterval: (q) => {
+      const status = q.state.data?.status
+      return status === 'RUNNING' || status === 'PENDING' ? 3000 : false
+    },
   })
 
   const { data: findings = [] } = useQuery({
@@ -32,7 +35,7 @@ export function ScanDetail() {
     enabled: session?.status === 'COMPLETED',
   })
 
-  const { events } = useScanEvents(
+  const { events, done: sseDone } = useScanEvents(
     session?.status === 'RUNNING' || session?.status === 'PENDING' ? id! : null
   )
 
@@ -104,8 +107,11 @@ export function ScanDetail() {
       {/* Live events (scan en cours) */}
       {(session.status === 'RUNNING' || session.status === 'PENDING') && (
         <div className="bg-gray-900 rounded-xl p-4 mb-6">
-          <p className="flex items-center gap-2 text-sm text-green-400 font-medium mb-3">
-            <Radio size={14} className="animate-pulse" /> Événements live
+          <p className="flex items-center gap-2 text-sm font-medium mb-3">
+            {sseDone
+              ? <><Radio size={14} className="text-yellow-400 animate-pulse" /> <span className="text-yellow-400">Reconnexion SSE…</span></>
+              : <><Radio size={14} className="text-green-400 animate-pulse" /> <span className="text-green-400">Événements live</span></>
+            }
           </p>
           <div className="space-y-1 max-h-48 overflow-y-auto font-mono text-xs">
             {events.length === 0
