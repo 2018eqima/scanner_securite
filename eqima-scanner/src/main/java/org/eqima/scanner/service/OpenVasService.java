@@ -92,8 +92,12 @@ public class OpenVasService {
             String targetId = extractAttribute(targetXml, "id");
 
             // 2. Récupérer la config "Full and fast"
-            String configs = sendAuthenticated("<get_configs/>");
+            String configs = sendAuthenticated("<get_configs filter=\"rows=-1\"/>");
             String configId = extractConfigId(configs, "Full and fast");
+            if (configId.isEmpty()) {
+                throw new IllegalStateException(
+                    "Aucune configuration de scan disponible. GVM synchronise encore ses feeds NVT — réessayez dans quelques minutes.");
+            }
 
             // 3. Créer la tâche
             String taskXml = sendAuthenticated(String.format(
