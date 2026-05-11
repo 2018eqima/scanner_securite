@@ -14,6 +14,9 @@ export const scanApi = {
   findings: (id: string) =>
     api.get<Finding[]>(`/v1/scans/${id}/findings`).then(r => r.data),
 
+  attackSurface: (id: string) =>
+    api.get(`/v1/scans/${id}/attack-surface`).then(r => r.data),
+
   reportUrl: (id: string) =>
     `${import.meta.env.VITE_API_URL || 'https://preprod.api.scanner.eqima.org'}/v1/scans/${id}/report`,
 }

@@ -1,11 +1,13 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Layout }     from './components/Layout'
-import { Dashboard }  from './pages/Dashboard'
-import { Targets }    from './pages/Targets'
-import { ScansList }  from './pages/ScansList'
-import { NewScan }    from './pages/NewScan'
-import { ScanDetail } from './pages/ScanDetail'
+import { Layout }          from './components/Layout'
+import { Dashboard }       from './pages/Dashboard'
+import { Targets }         from './pages/Targets'
+import { ScansList }       from './pages/ScansList'
+import { NewScan }         from './pages/NewScan'
+import { ScanDetail }      from './pages/ScanDetail'
+import { AttackSurface }   from './pages/AttackSurface'
+import { AttackSurfaceSelector } from './pages/AttackSurfaceSelector'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,7 +27,9 @@ export default function App() {
               <Route index element={<ScansList />} />
               <Route path="new" element={<NewScan />} />
               <Route path=":id" element={<ScanDetail />} />
+              <Route path=":id/attack-surface" element={<AttackSurface />} />
             </Route>
+            <Route path="attack-surface" element={<AttackSurfaceSelector />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

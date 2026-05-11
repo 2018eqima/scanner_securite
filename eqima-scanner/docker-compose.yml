@@ -12,13 +12,13 @@ services:
       DB_USER: ${DB_USER:-eqima_scanner}
       DB_PASSWORD: ${DB_PASSWORD}
       KEYCLOAK_URL: ${KEYCLOAK_URL:-https://auth.eqima.org}
-      FRONTEND_URL: ${FRONTEND_URL:-https://scanner.eqima.org}
+      FRONTEND_URL: ${FRONTEND_URL:-https://preprod.scanner.eqima.org}
     ports:
       - "127.0.0.1:8088:8085"
     networks:
       - infra-net
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- --server-response http://localhost:8085/v1/targets 2>&1 | grep -qE 'HTTP/|401' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5

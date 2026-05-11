@@ -55,14 +55,19 @@ public class SslService {
                 if (response == null) break;
 
                 String status = response.path("status").asText("");
+                log.info("SSL Labs [{}] status={} (poll {}/{})", host, status, polls, MAX_POLLS);
                 if ("READY".equals(status) || "ERROR".equals(status)) break;
 
                 Thread.sleep(POLL_INTERVAL_MS);
-                response = webClient.get()
-                        .uri("/analyze?host={host}&publish=off&all=done&ignoreMismatch=on", host)
-                        .retrieve()
-                        .bodyToMono(JsonNode.class)
-                        .block();
+                try {
+                    response = webClient.get()
+                            .uri("/analyze?host={host}&publish=off&all=done&ignoreMismatch=on", host)
+                            .retrieve()
+                            .bodyToMono(JsonNode.class)
+                            .block();
+                } catch (Exception pollEx) {
+                    log.warn("SSL Labs poll error (will retry): {}", pollEx.getMessage());
+                }
                 polls++;
             }
 
@@ -95,20 +100,33 @@ public class SslService {
         result.put("ipAddress", ep.path("ipAddress").asText(""));
         result.put("hasWarnings", ep.path("hasWarnings").asBoolean(false));
 
-        // Certificat
-        JsonNode cert = details.path("cert");
-        if (!cert.isMissingNode()) {
-            result.put("certSubject", cert.path("subject").asText(""));
-            result.put("certIssuer", cert.path("issuerLabel").asText(""));
-            long notAfterMs = cert.path("notAfter").asLong(0);
-            if (notAfterMs > 0) {
-                result.put("certExpiry", Instant.ofEpochMilli(notAfterMs).toString());
-            }
-            long notBeforeMs = cert.path("notBefore").asLong(0);
-            if (notBeforeMs > 0) {
-                result.put("certValidFrom", Instant.ofEpochMilli(notBeforeMs).toString());
+        // Certificat — API v3 : certChains[0].certs[0], fallback v2 : cert
+        JsonNode certNode = null;
+        JsonNode certChains = details.path("certChains");
+        if (certChains.isArray() && !certChains.isEmpty()) {
+            JsonNode certs = certChains.get(0).path("certs");
+            if (certs.isArray() && !certs.isEmpty()) {
+                certNode = certs.get(0);
             }
         }
+        if (certNode == null || certNode.isMissingNode()) {
+            JsonNode legacyCert = details.path("cert");
+            if (!legacyCert.isMissingNode()) certNode = legacyCert;
+        }
+        if (certNode != null && !certNode.isMissingNode()) {
+            String subject = certNode.path("subject").asText(
+                    certNode.path("commonNames").isArray() && !certNode.path("commonNames").isEmpty()
+                            ? certNode.path("commonNames").get(0).asText("") : "");
+            result.put("certSubject", subject);
+            result.put("certIssuer", certNode.path("issuerLabel").asText(
+                    certNode.path("issuerSubject").asText("")));
+            long notAfterMs = certNode.path("notAfter").asLong(0);
+            if (notAfterMs > 0) result.put("certExpiry", Instant.ofEpochMilli(notAfterMs).toString());
+            long notBeforeMs = certNode.path("notBefore").asLong(0);
+            if (notBeforeMs > 0) result.put("certValidFrom", Instant.ofEpochMilli(notBeforeMs).toString());
+        }
+        log.info("SSL Labs cert parsed for {}: subject={}", host,
+                result.path("certSubject").asText("(none)"));
 
         // Protocoles TLS supportés
         List<String> protocols = new ArrayList<>();

@@ -11,7 +11,7 @@ import { TechStackCard } from '../components/TechStackCard'
 import { Finding, Severity } from '../types'
 import {
   ArrowLeft, Download, Radio, Terminal, AlertTriangle,
-  Info, ChevronDown, ChevronUp
+  Info, ChevronDown, ChevronUp, Crosshair
 } from 'lucide-react'
 
 const SEVERITIES: Severity[] = ['HIGH', 'MEDIUM', 'LOW', 'INFORMATIONAL']
@@ -69,14 +69,22 @@ export function ScanDetail() {
         <div className="flex items-center gap-3">
           <StatusBadge status={session.status} />
           {session.status === 'COMPLETED' && (
-            <a
-              href={scanApi.reportUrl(session.id)}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 text-sm font-medium"
-            >
-              <Download size={15} /> Rapport PDF
-            </a>
+            <>
+              <button
+                onClick={() => navigate(`/scans/${session.id}/attack-surface`)}
+                className="flex items-center gap-2 bg-gray-800 text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700 text-sm font-medium border border-gray-700"
+              >
+                <Crosshair size={15} /> Attack Surface
+              </button>
+              <a
+                href={scanApi.reportUrl(session.id)}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-lg hover:bg-brand-700 text-sm font-medium"
+              >
+                <Download size={15} /> Rapport PDF
+              </a>
+            </>
           )}
         </div>
       </div>

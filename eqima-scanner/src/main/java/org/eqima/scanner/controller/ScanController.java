@@ -1,9 +1,11 @@
 package org.eqima.scanner.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.eqima.scanner.dto.FindingDto;
 import org.eqima.scanner.dto.ScanEvent;
 import org.eqima.scanner.dto.ScanSessionDto;
 import org.eqima.scanner.dto.StartScanRequest;
+import org.eqima.scanner.service.AttackSurfaceService;
 import org.eqima.scanner.service.ReportService;
 import org.eqima.scanner.service.ScanService;
 import org.springframework.http.HttpHeaders;
@@ -23,10 +25,13 @@ public class ScanController {
 
     private final ScanService scanService;
     private final ReportService reportService;
+    private final AttackSurfaceService attackSurfaceService;
 
-    public ScanController(ScanService scanService, ReportService reportService) {
+    public ScanController(ScanService scanService, ReportService reportService,
+                          AttackSurfaceService attackSurfaceService) {
         this.scanService = scanService;
         this.reportService = reportService;
+        this.attackSurfaceService = attackSurfaceService;
     }
 
     /** POST /v1/scans → démarre un scan, retourne 201 avec le sessionId */
@@ -65,6 +70,12 @@ public class ScanController {
                         .event(event.type())
                         .data(event)
                         .build());
+    }
+
+    /** GET /v1/scans/{id}/attack-surface → surface d'attaque via ZAP */
+    @GetMapping("/{id}/attack-surface")
+    public Mono<JsonNode> getAttackSurface(@PathVariable String id) {
+        return attackSurfaceService.getAttackSurface(id);
     }
 
     /** GET /v1/scans/{id}/report → télécharge le rapport PDF iText7 */
