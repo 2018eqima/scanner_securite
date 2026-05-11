@@ -67,6 +67,39 @@ public class AttackSurfaceService {
             // ── Messages HTTP (méthodes, params, status codes) ─────────────
             List<Map<String, Object>> messages = fetchMessages(targetUrl);
 
+            // ── Hosts et ports détectés ─────────────────────────────────────
+            Map<String, Set<Integer>> hostPorts = new LinkedHashMap<>();
+            for (Map<String, Object> msg : messages) {
+                String msgUrl = (String) msg.getOrDefault("url", "");
+                try {
+                    java.net.URI uri = java.net.URI.create(msgUrl);
+                    String host = uri.getHost();
+                    int port = uri.getPort();
+                    if (port == -1) port = "https".equals(uri.getScheme()) ? 443 : 80;
+                    if (host != null) hostPorts.computeIfAbsent(host, k -> new LinkedHashSet<>()).add(port);
+                } catch (Exception ignored) {}
+            }
+            // Ajouter aussi les URLs du spider
+            for (String url : spiderUrls) {
+                try {
+                    java.net.URI uri = java.net.URI.create(url);
+                    String host = uri.getHost();
+                    int port = uri.getPort();
+                    if (port == -1) port = "https".equals(uri.getScheme()) ? 443 : 80;
+                    if (host != null) hostPorts.computeIfAbsent(host, k -> new LinkedHashSet<>()).add(port);
+                } catch (Exception ignored) {}
+            }
+            ArrayNode hostsArr = objectMapper.createArrayNode();
+            hostPorts.forEach((host, ports) -> {
+                ObjectNode hn = objectMapper.createObjectNode();
+                hn.put("host", host);
+                ArrayNode portsArr = objectMapper.createArrayNode();
+                ports.forEach(portsArr::add);
+                hn.set("ports", portsArr);
+                hostsArr.add(hn);
+            });
+            root.set("hosts", hostsArr);
+
             // ── Construire les endpoints enrichis ─────────────────────────
             Map<String, ObjectNode> endpointMap = new LinkedHashMap<>();
 

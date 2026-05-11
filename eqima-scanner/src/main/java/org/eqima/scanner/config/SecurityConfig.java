@@ -36,6 +36,8 @@ public class SecurityConfig {
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers("/actuator/health").permitAll()
                         .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .pathMatchers("/v1/subdomains/**").hasRole("scanner-user")
+                        .pathMatchers("/v1/infra/**").hasRole("scanner-user")
                         .pathMatchers("/v1/**").hasRole("scanner-user")
                         .anyExchange().authenticated()
                 )

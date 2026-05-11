@@ -32,6 +32,12 @@ zap:
   url: ${ZAP_URL:https://security.eqima.org}
   api-key: ${ZAP_API_KEY}
 
+openvas:
+  host: ${OPENVAS_HOST:127.0.0.1}
+  port: ${OPENVAS_PORT:9390}
+  user: ${OPENVAS_USER:admin}
+  password: ${OPENVAS_PASSWORD:admin}
+
 cors:
   allowed-origin: ${FRONTEND_URL:https://scanner.eqima.org}
 

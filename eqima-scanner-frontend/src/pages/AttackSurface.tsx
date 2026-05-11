@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { scanApi } from '../api/scans'
 import {
   Crosshair, Globe, ArrowLeft, ChevronDown, ChevronRight,
-  AlertTriangle, CheckCircle, ExternalLink, Search, Filter
+  AlertTriangle, CheckCircle, ExternalLink, Search, Filter, Server
 } from 'lucide-react'
 
 type Endpoint = {
@@ -18,6 +18,11 @@ type Endpoint = {
   interesting: boolean
 }
 
+type HostEntry = {
+  host: string
+  ports: number[]
+}
+
 type AttackSurfaceData = {
   targetUrl: string
   targetName: string
@@ -26,6 +31,7 @@ type AttackSurfaceData = {
   interestingEndpoints: number
   formsDetected: number
   httpMethods: string[]
+  hosts: HostEntry[]
   endpoints: Endpoint[]
 }
 
@@ -182,6 +188,7 @@ export function AttackSurface() {
             <Stat label="Endpoints" value={data.totalEndpoints} color="text-green-400" />
             <Stat label="Intéressants" value={data.interestingEndpoints} color="text-red-400" />
             <Stat label="Formulaires" value={data.formsDetected} color="text-yellow-400" />
+            <Stat label="Hosts" value={data.hosts?.length ?? 0} color="text-cyan-400" />
             <div className="flex gap-1">
               {data.httpMethods.map(m => <MethodBadge key={m} method={m} />)}
             </div>
@@ -246,6 +253,33 @@ export function AttackSurface() {
             <AlertTriangle size={40} className="text-orange-400 mb-4" />
             <p className="font-mono text-sm text-orange-300">Impossible de charger la surface d'attaque</p>
             <p className="text-xs text-gray-600 mt-1">Le scan est-il terminé ? ZAP est-il disponible ?</p>
+          </div>
+        )}
+
+        {/* Hosts & Ports */}
+        {!isLoading && !error && data && data.hosts && data.hosts.length > 0 && (
+          <div className="px-4 py-3 border-b border-gray-800 bg-gray-950/60">
+            <div className="flex items-center gap-2 mb-2">
+              <Server size={13} className="text-cyan-500" />
+              <span className="text-[10px] uppercase tracking-widest text-gray-500 font-mono">Hosts &amp; Ports détectés</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {data.hosts.map(h => (
+                <div key={h.host} className="flex items-center gap-1.5 bg-gray-800 border border-gray-700 rounded px-2 py-1">
+                  <span className="text-xs font-mono text-cyan-300">{h.host}</span>
+                  <span className="text-gray-600">:</span>
+                  <div className="flex gap-1">
+                    {h.ports.map(p => (
+                      <span key={p} className={`text-[10px] font-mono px-1 rounded ${
+                        p === 443 ? 'bg-green-900/50 text-green-400' :
+                        p === 80  ? 'bg-yellow-900/50 text-yellow-400' :
+                        'bg-red-900/50 text-red-400'
+                      }`}>{p}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

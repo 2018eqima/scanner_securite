@@ -8,6 +8,7 @@ import { NewScan }         from './pages/NewScan'
 import { ScanDetail }      from './pages/ScanDetail'
 import { AttackSurface }   from './pages/AttackSurface'
 import { AttackSurfaceSelector } from './pages/AttackSurfaceSelector'
+import { InfraNetwork }    from './pages/InfraNetwork'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,6 +31,7 @@ export default function App() {
               <Route path=":id/attack-surface" element={<AttackSurface />} />
             </Route>
             <Route path="attack-surface" element={<AttackSurfaceSelector />} />
+            <Route path="infra" element={<InfraNetwork />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
