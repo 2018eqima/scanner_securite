@@ -7,6 +7,7 @@ import { StatusBadge } from '../components/StatusBadge'
 import { SeverityBadge } from '../components/SeverityBadge'
 import { ProgressBar } from '../components/ProgressBar'
 import { SslCard } from '../components/SslCard'
+import { TechStackCard } from '../components/TechStackCard'
 import { Finding, Severity } from '../types'
 import {
   ArrowLeft, Download, Radio, Terminal, AlertTriangle,
@@ -127,6 +128,11 @@ export function ScanDetail() {
             }
           </div>
         </div>
+      )}
+
+      {/* Stack technique */}
+      {session.status === 'COMPLETED' && (
+        <TechStackCard techData={session.techData} />
       )}
 
       {/* SSL */}

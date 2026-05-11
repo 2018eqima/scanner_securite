@@ -40,6 +40,9 @@ public class ScanSession {
     @Column(columnDefinition = "TEXT")
     private String sslData; // JSON complet SSL Labs
 
+    @Column(columnDefinition = "TEXT")
+    private String techData; // JSON stack technique détecté
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
 
@@ -78,4 +81,7 @@ public class ScanSession {
 
     public String getSslData() { return sslData; }
     public void setSslData(String sslData) { this.sslData = sslData; }
+
+    public String getTechData() { return techData; }
+    public void setTechData(String techData) { this.techData = techData; }
 }

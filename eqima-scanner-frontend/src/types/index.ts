@@ -34,7 +34,8 @@ export interface ScanSession {
   progress: number
   totalFindings: number
   sslGrade?: string
-  sslData?: string  // JSON string → parse vers SslData
+  sslData?: string   // JSON string → parse vers SslData
+  techData?: string  // JSON string → parse vers TechData
 }
 
 export interface Finding {

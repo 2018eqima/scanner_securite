@@ -32,6 +32,7 @@ public class ScanService {
     private final FindingRepository findingRepo;
     private final ZapService zapService;
     private final SslService sslService;
+    private final TechStackService techStackService;
 
     // Sinks actifs par sessionId — supprimés à la fin du scan
     private final Map<String, Sinks.Many<ScanEvent>> activeSinks = new ConcurrentHashMap<>();
@@ -39,11 +40,13 @@ public class ScanService {
     public ScanService(ScanSessionRepository sessionRepo,
                        FindingRepository findingRepo,
                        ZapService zapService,
-                       SslService sslService) {
+                       SslService sslService,
+                       TechStackService techStackService) {
         this.sessionRepo = sessionRepo;
         this.findingRepo = findingRepo;
         this.zapService = zapService;
         this.sslService = sslService;
+        this.techStackService = techStackService;
     }
 
     public Mono<ScanSession> startScan(StartScanRequest request) {
@@ -140,6 +143,15 @@ public class ScanService {
 
             pollProgress(scanId, "SCAN_PROGRESS", session, sink,
                     (id) -> zapService.getScanProgress(id).block());
+
+            // ── Détection stack technique ─────────────────────────────────────
+            emit(sink, session.getId(), "SCAN_PROGRESS", "Détection du stack technique...", 87);
+            String techData = techStackService.detect(url);
+            if (techData != null) {
+                session.setTechData(techData);
+                sessionRepo.save(session);
+                emit(sink, session.getId(), "TECH_DONE", "Stack technique détecté", 89);
+            }
 
             // ── Analyse SSL ───────────────────────────────────────────────────
             if (url.startsWith("https://")) {

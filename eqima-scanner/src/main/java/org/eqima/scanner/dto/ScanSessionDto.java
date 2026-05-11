@@ -15,7 +15,8 @@ public record ScanSessionDto(
         Integer progress,
         Integer totalFindings,
         String sslGrade,
-        String sslData
+        String sslData,
+        String techData
 ) {
     public static ScanSessionDto from(ScanSession s) {
         return new ScanSessionDto(
@@ -29,7 +30,8 @@ public record ScanSessionDto(
                 s.getProgress(),
                 s.getTotalFindings(),
                 s.getSslGrade(),
-                s.getSslData()
+                s.getSslData(),
+                s.getTechData()
         );
     }
 }
