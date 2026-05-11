@@ -6,29 +6,28 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Interroge des bases de threat intelligence publiques pour détecter
- * les indicateurs de compromission (IoC) associés à une IP ou un domaine.
+ * Interroge des bases de threat intelligence publiques (sans clé API) pour
+ * détecter les indicateurs de compromission associés à une IP ou un domaine.
  *
- * Sources utilisées :
- *  - URLhaus (abuse.ch)  : URLs malveillantes hébergées sur l'hôte
- *  - Feodo Tracker       : IPs de botnets C2 connues
+ * Sources :
+ *  - Shodan InternetDB  : ports ouverts, CVEs, tags malware (gratuit, sans clé)
+ *  - Feodo Tracker      : IPs de botnets C2 connus (Emotet, Trickbot, etc.)
  */
 @Service
 public class ThreatIntelService {
 
     private static final Logger log = LoggerFactory.getLogger(ThreatIntelService.class);
 
-    private static final WebClient URLHAUS = WebClient.builder()
-            .baseUrl("https://urlhaus-api.abuse.ch/v1")
+    private static final WebClient SHODAN = WebClient.builder()
+            .baseUrl("https://internetdb.shodan.io")
             .defaultHeader("User-Agent", "EqimaScanner/1.0")
             .build();
 
@@ -45,7 +44,7 @@ public class ThreatIntelService {
 
     public Mono<ObjectNode> check(String target) {
         return Mono.zip(
-                queryUrlhaus(target),
+                queryShodan(target),
                 queryFeodo(target)
         ).map(tuple -> merge(target, tuple.getT1(), tuple.getT2()))
          .onErrorResume(e -> {
@@ -58,21 +57,26 @@ public class ThreatIntelService {
          });
     }
 
-    // ── URLhaus ──────────────────────────────────────────────────────────────
+    // ── Shodan InternetDB ─────────────────────────────────────────────────────
 
-    private Mono<JsonNode> queryUrlhaus(String target) {
-        return URLHAUS.post()
-                .uri("/host/")
-                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .body(BodyInserters.fromFormData("host", target))
+    private Mono<JsonNode> queryShodan(String target) {
+        // InternetDB only works for IPs, not domains
+        boolean isIp = target.matches("\\d+\\.\\d+\\.\\d+\\.\\d+");
+        if (!isIp) return Mono.just(mapper.createObjectNode().put("shodan", false));
+
+        return SHODAN.get()
+                .uri("/{ip}", target)
                 .retrieve()
                 .bodyToMono(JsonNode.class)
-                .onErrorReturn(mapper.createObjectNode().put("query_status", "error"));
+                .onErrorReturn(mapper.createObjectNode().put("shodan", false));
     }
 
-    // ── Feodo Tracker ────────────────────────────────────────────────────────
+    // ── Feodo Tracker ─────────────────────────────────────────────────────────
 
     private Mono<JsonNode> queryFeodo(String target) {
+        boolean isIp = target.matches("\\d+\\.\\d+\\.\\d+\\.\\d+");
+        if (!isIp) return Mono.just(mapper.createObjectNode().put("feodo", false));
+
         return FEODO.get()
                 .uri("/downloads/ipblocklist.json")
                 .retrieve()
@@ -86,14 +90,14 @@ public class ThreatIntelService {
         result.put("feodo", false);
         if (feodoList.isArray()) {
             for (JsonNode entry : feodoList) {
-                String ip = entry.path("ip_address").asText("");
-                if (ip.equals(target)) {
+                if (target.equals(entry.path("ip_address").asText(""))) {
                     result.put("feodo", true);
                     result.put("malware", entry.path("malware").asText(""));
                     result.put("status", entry.path("status").asText(""));
                     result.put("firstSeen", entry.path("first_seen").asText(""));
-                    result.put("lastSeen", entry.path("last_seen").asText(""));
+                    result.put("lastOnline", entry.path("last_online").asText(""));
                     result.put("country", entry.path("country").asText(""));
+                    result.put("asName", entry.path("as_name").asText(""));
                     break;
                 }
             }
@@ -101,72 +105,75 @@ public class ThreatIntelService {
         return result;
     }
 
-    // ── Merge results ─────────────────────────────────────────────────────────
+    // ── Merge ─────────────────────────────────────────────────────────────────
 
-    private ObjectNode merge(String target, JsonNode urlhaus, JsonNode feodo) {
+    private ObjectNode merge(String target, JsonNode shodan, JsonNode feodo) {
         ObjectNode out = mapper.createObjectNode();
         out.put("target", target);
 
-        // URLhaus
-        String queryStatus = urlhaus.path("query_status").asText("no_results");
-        boolean listedUrlhaus = "is_host".equals(queryStatus);
-        out.put("urlhausListed", listedUrlhaus);
-        if (listedUrlhaus) {
-            out.put("urlhausReference", urlhaus.path("urlhaus_reference").asText(""));
-            // Blacklists
-            JsonNode bl = urlhaus.path("blacklists");
-            out.put("spamhausDbl", bl.path("spamhaus_dbl").asText("not listed"));
-            out.put("surbl", bl.path("surbl").asText("not listed"));
-            // Tags
+        // Shodan InternetDB
+        boolean hasShodan = shodan.has("ip");
+        out.put("shodanAvailable", hasShodan);
+        if (hasShodan) {
+            // Open ports
+            ArrayNode ports = mapper.createArrayNode();
+            shodan.path("ports").forEach(ports::add);
+            out.set("openPorts", ports);
+
+            // CVEs
+            ArrayNode cves = mapper.createArrayNode();
+            shodan.path("vulns").forEach(cves::add);
+            out.set("cves", cves);
+
+            // Tags (malware, vpn, tor, botnet, etc.)
             ArrayNode tags = mapper.createArrayNode();
-            urlhaus.path("tags").forEach(tags::add);
+            shodan.path("tags").forEach(tags::add);
             out.set("tags", tags);
-            // Active malware URLs (max 10)
-            ArrayNode urls = mapper.createArrayNode();
-            List<JsonNode> allUrls = new java.util.ArrayList<>();
-            urlhaus.path("urls").forEach(allUrls::add);
-            allUrls.stream()
-                   .filter(u -> "online".equals(u.path("url_status").asText()))
-                   .limit(5)
-                   .forEach(u -> {
-                       ObjectNode item = mapper.createObjectNode();
-                       item.put("url", u.path("url").asText(""));
-                       item.put("status", u.path("url_status").asText(""));
-                       item.put("threat", u.path("threat").asText(""));
-                       item.put("dateAdded", u.path("date_added").asText(""));
-                       item.put("tags", u.path("tags").asText(""));
-                       urls.add(item);
-                   });
-            // if no online, take offline ones
-            if (urls.isEmpty()) {
-                allUrls.stream().limit(5).forEach(u -> {
-                    ObjectNode item = mapper.createObjectNode();
-                    item.put("url", u.path("url").asText(""));
-                    item.put("status", u.path("url_status").asText(""));
-                    item.put("threat", u.path("threat").asText(""));
-                    item.put("dateAdded", u.path("date_added").asText(""));
-                    urls.add(item);
-                });
-            }
-            out.set("malwareUrls", urls);
+
+            // Hostnames
+            ArrayNode hostnames = mapper.createArrayNode();
+            shodan.path("hostnames").forEach(hostnames::add);
+            out.set("hostnames", hostnames);
+
+            // CPEs (detected software)
+            ArrayNode cpes = mapper.createArrayNode();
+            shodan.path("cpes").forEach(cpes::add);
+            out.set("cpes", cpes);
+
+            out.put("shodanRef", "https://www.shodan.io/host/" + target);
         }
 
-        // Feodo Tracker
+        // Feodo
         boolean feodoListed = feodo.path("feodo").asBoolean(false);
         out.put("feodoListed", feodoListed);
         if (feodoListed) {
             out.put("feodoMalware", feodo.path("malware").asText(""));
             out.put("feodoStatus", feodo.path("status").asText(""));
             out.put("feodoFirstSeen", feodo.path("firstSeen").asText(""));
+            out.put("feodoLastOnline", feodo.path("lastOnline").asText(""));
             out.put("feodoCountry", feodo.path("country").asText(""));
+            out.put("feodoAsName", feodo.path("asName").asText(""));
         }
 
-        // Overall threat level
+        // Threat level
         if (feodoListed) {
             out.put("threatLevel", "critical");
-        } else if (listedUrlhaus) {
-            String dbl = out.path("spamhausDbl").asText();
-            out.put("threatLevel", dbl.contains("listed") ? "high" : "medium");
+        } else if (hasShodan) {
+            List<String> tagList = new ArrayList<>();
+            shodan.path("tags").forEach(t -> tagList.add(t.asText().toLowerCase()));
+            boolean maliciousTags = tagList.stream().anyMatch(t ->
+                t.contains("malware") || t.contains("botnet") || t.contains("c2") ||
+                t.contains("ransomware") || t.contains("spam"));
+            int cveCount = shodan.path("vulns").size();
+            if (maliciousTags) {
+                out.put("threatLevel", "high");
+            } else if (cveCount >= 5) {
+                out.put("threatLevel", "medium");
+            } else if (cveCount > 0) {
+                out.put("threatLevel", "low");
+            } else {
+                out.put("threatLevel", "clean");
+            }
         } else {
             out.put("threatLevel", "clean");
         }

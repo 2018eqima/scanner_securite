@@ -24,18 +24,21 @@ type InfraTask = {
 
 type ThreatIntel = {
   target: string
-  threatLevel: 'clean' | 'medium' | 'high' | 'critical' | 'unknown'
-  urlhausListed?: boolean
-  urlhausReference?: string
-  spamhausDbl?: string
-  surbl?: string
+  threatLevel: 'clean' | 'low' | 'medium' | 'high' | 'critical' | 'unknown'
+  shodanAvailable?: boolean
+  openPorts?: number[]
+  cves?: string[]
   tags?: string[]
-  malwareUrls?: { url: string; status: string; threat: string; dateAdded: string }[]
+  hostnames?: string[]
+  cpes?: string[]
+  shodanRef?: string
   feodoListed?: boolean
   feodoMalware?: string
   feodoStatus?: string
   feodoFirstSeen?: string
+  feodoLastOnline?: string
   feodoCountry?: string
+  feodoAsName?: string
   error?: string
 }
 
@@ -95,25 +98,30 @@ function ResultRow({ r }: { r: InfraResult }) {
   )
 }
 
-const THREAT_LEVEL_COLORS = {
+const THREAT_LEVEL_COLORS: Record<string, string> = {
   clean:    'text-green-400 border-green-800 bg-green-950/30',
+  low:      'text-blue-400 border-blue-800 bg-blue-950/30',
   medium:   'text-yellow-400 border-yellow-800 bg-yellow-950/30',
   high:     'text-orange-400 border-orange-800 bg-orange-950/30',
   critical: 'text-red-400 border-red-800 bg-red-950/30',
   unknown:  'text-gray-400 border-gray-700 bg-gray-900',
 }
 
-const THREAT_LEVEL_LABELS = {
+const THREAT_LEVEL_LABELS: Record<string, string> = {
   clean:    'Propre',
+  low:      'Faible risque',
   medium:   'Suspect',
   high:     'Dangereux',
   critical: 'Critique',
   unknown:  'Inconnu',
 }
 
+const MALICIOUS_TAGS = new Set(['malware', 'botnet', 'c2', 'ransomware', 'spam', 'tor', 'vpn'])
+
 function ThreatIntelPanel({ ti }: { ti: ThreatIntel }) {
   const cls = THREAT_LEVEL_COLORS[ti.threatLevel] ?? THREAT_LEVEL_COLORS.unknown
   const label = THREAT_LEVEL_LABELS[ti.threatLevel] ?? '?'
+
   return (
     <div className={`border rounded-lg p-4 mb-4 ${cls}`}>
       <div className="flex items-center gap-2 mb-3">
@@ -124,70 +132,88 @@ function ThreatIntelPanel({ ti }: { ti: ThreatIntel }) {
         </span>
       </div>
 
-      {ti.error && (
-        <p className="text-xs text-gray-500 font-mono">Erreur: {ti.error}</p>
-      )}
+      {ti.error && <p className="text-xs text-gray-500 font-mono">Erreur: {ti.error}</p>}
 
       {/* Feodo Tracker — botnet C2 */}
       {ti.feodoListed && (
         <div className="mb-3 p-2 bg-red-950/50 rounded border border-red-800">
           <p className="text-xs font-bold text-red-300 mb-1 uppercase tracking-widest">Botnet C2 (Feodo Tracker)</p>
-          <p className="text-xs font-mono text-red-200">Malware: <span className="text-white">{ti.feodoMalware}</span></p>
-          <p className="text-xs font-mono text-red-200">Statut: <span className="text-white">{ti.feodoStatus}</span></p>
-          <p className="text-xs font-mono text-red-200">Premier vu: {ti.feodoFirstSeen} — {ti.feodoCountry}</p>
+          <div className="grid grid-cols-2 gap-x-4 text-xs font-mono text-red-200">
+            <span>Malware: <span className="text-white">{ti.feodoMalware}</span></span>
+            <span>Statut: <span className={ti.feodoStatus === 'online' ? 'text-red-400 font-bold' : 'text-gray-300'}>{ti.feodoStatus}</span></span>
+            <span>Premier vu: {ti.feodoFirstSeen}</span>
+            <span>Pays: {ti.feodoCountry} — {ti.feodoAsName}</span>
+          </div>
         </div>
       )}
 
-      {/* URLhaus */}
-      {ti.urlhausListed && (
+      {/* Shodan InternetDB */}
+      {ti.shodanAvailable && (
         <div className="space-y-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-400 font-mono">URLhaus:</span>
-            <a href={ti.urlhausReference} target="_blank" rel="noopener noreferrer"
-               className="text-xs text-cyan-400 hover:underline flex items-center gap-1">
-              Rapport <ExternalLink size={10} />
-            </a>
-            {ti.spamhausDbl && ti.spamhausDbl !== 'not listed' && (
-              <span className="text-[10px] bg-orange-900/50 text-orange-300 border border-orange-700 px-1.5 py-0.5 rounded font-mono">
-                Spamhaus: {ti.spamhausDbl}
-              </span>
-            )}
-            {ti.surbl && ti.surbl !== 'not listed' && (
-              <span className="text-[10px] bg-orange-900/50 text-orange-300 border border-orange-700 px-1.5 py-0.5 rounded font-mono">
-                SURBL: {ti.surbl}
-              </span>
-            )}
-          </div>
+          {/* Tags */}
           {ti.tags && ti.tags.length > 0 && (
             <div className="flex gap-1 flex-wrap">
               {ti.tags.map((t, i) => (
-                <span key={i} className="text-[10px] bg-gray-800 text-gray-300 border border-gray-700 px-1.5 py-0.5 rounded font-mono">
-                  {t}
-                </span>
+                <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded border font-mono font-bold uppercase ${
+                  MALICIOUS_TAGS.has(t.toLowerCase())
+                    ? 'bg-red-900/60 text-red-300 border-red-700'
+                    : 'bg-gray-800 text-gray-400 border-gray-700'
+                }`}>{t}</span>
               ))}
             </div>
           )}
-          {ti.malwareUrls && ti.malwareUrls.length > 0 && (
+
+          {/* Open ports */}
+          {ti.openPorts && ti.openPorts.length > 0 && (
             <div>
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-mono mb-1">URLs malveillantes</p>
-              <div className="space-y-1">
-                {ti.malwareUrls.map((u, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs font-mono">
-                    <span className={`shrink-0 text-[10px] px-1 py-0.5 rounded border font-bold ${
-                      u.status === 'online' ? 'bg-red-900/60 text-red-300 border-red-700' : 'bg-gray-800 text-gray-500 border-gray-700'
-                    }`}>{u.status}</span>
-                    <span className="text-gray-400 truncate flex-1">{u.url}</span>
-                    {u.threat && <span className="shrink-0 text-orange-400">{u.threat}</span>}
-                  </div>
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-mono mb-1">
+                Ports ouverts ({ti.openPorts.length})
+              </p>
+              <div className="flex gap-1 flex-wrap">
+                {ti.openPorts.map((p, i) => (
+                  <span key={i} className="text-[10px] font-mono bg-gray-800 text-cyan-400 border border-gray-700 px-1.5 py-0.5 rounded">
+                    {p}
+                  </span>
                 ))}
               </div>
             </div>
           )}
+
+          {/* CVEs */}
+          {ti.cves && ti.cves.length > 0 && (
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-mono mb-1">
+                CVEs connues ({ti.cves.length})
+              </p>
+              <div className="flex gap-1 flex-wrap max-h-20 overflow-y-auto">
+                {ti.cves.map((c, i) => (
+                  <a key={i} href={`https://nvd.nist.gov/vuln/detail/${c}`} target="_blank" rel="noopener noreferrer"
+                     className="text-[10px] font-mono bg-orange-950/50 text-orange-300 border border-orange-800 px-1.5 py-0.5 rounded hover:bg-orange-900/50">
+                    {c}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Shodan link */}
+          <a href={ti.shodanRef} target="_blank" rel="noopener noreferrer"
+             className="inline-flex items-center gap-1 text-[10px] text-cyan-600 hover:text-cyan-400 font-mono">
+            Voir sur Shodan <ExternalLink size={9} />
+          </a>
         </div>
       )}
 
-      {ti.threatLevel === 'clean' && !ti.error && (
-        <p className="text-xs text-green-400 font-mono">Aucun indicateur de compromission détecté.</p>
+      {!ti.shodanAvailable && !ti.feodoListed && !ti.error && (
+        <p className="text-xs text-gray-500 font-mono">
+          {ti.target?.match(/^\d+\.\d+\.\d+\.\d+$/)
+            ? 'Aucun indicateur de compromission détecté.'
+            : 'Threat intel disponible pour les IPs uniquement (pas les domaines).'}
+        </p>
+      )}
+
+      {ti.threatLevel === 'clean' && ti.shodanAvailable && (
+        <p className="text-xs text-green-400 font-mono mt-2">Aucune vulnérabilité connue détectée.</p>
       )}
     </div>
   )
