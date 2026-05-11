@@ -1,7 +1,7 @@
-import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '../api/client'
-import { Server, Search, Loader, Shield, AlertTriangle, Info, Clock, ChevronDown, ChevronRight, Wrench } from 'lucide-react'
+import { Server, Search, Loader, Shield, AlertTriangle, Info, Clock, Wrench } from 'lucide-react'
+import { useState } from 'react'
 
 type PortEntry = {
   port: number
@@ -46,67 +46,63 @@ const RISK_ICONS: Record<string, JSX.Element> = {
   INFO:     <Info size={13} className="text-gray-500" />,
 }
 
+const RISK_BORDER: Record<string, string> = {
+  CRITICAL: 'border-red-800',
+  HIGH:     'border-orange-800',
+  MEDIUM:   'border-yellow-800',
+  LOW:      'border-blue-800',
+  INFO:     'border-gray-700',
+}
+
 function RiskBadge({ risk }: { risk: string }) {
   const cls = RISK_COLORS[risk] ?? RISK_COLORS.INFO
   return (
-    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border font-mono uppercase ${cls}`}>
+    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border font-mono uppercase ${cls}`}>
       {risk}
     </span>
   )
 }
 
-function PortRow({ p }: { p: PortEntry }) {
-  const [open, setOpen] = useState(false)
-  const rowBg = p.risk === 'CRITICAL' ? 'bg-red-950/10'
-              : p.risk === 'HIGH'     ? 'bg-orange-950/10'
-              : ''
+function PortCard({ p }: { p: PortEntry }) {
+  const border = RISK_BORDER[p.risk] ?? RISK_BORDER.INFO
   return (
-    <>
-      <tr
-        className={`border-t border-gray-800/50 cursor-pointer hover:bg-gray-800/30 transition-colors ${rowBg}`}
-        onClick={() => setOpen(o => !o)}
-      >
-        <td className="px-4 py-2.5 w-6 text-gray-600">
-          {open ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}
-        </td>
-        <td className="px-2 py-2.5 font-mono font-bold text-cyan-300">{p.port}</td>
-        <td className="px-4 py-2.5 font-mono text-gray-500 uppercase">{p.protocol}</td>
-        <td className="px-4 py-2.5 font-mono text-yellow-400">{p.service || '—'}</td>
-        <td className="px-4 py-2.5"><RiskBadge risk={p.risk} /></td>
-        <td className="px-4 py-2.5 text-gray-400 text-xs">{p.reason}</td>
-      </tr>
-      {open && (
-        <tr className={`border-t border-gray-800/30 ${rowBg}`}>
-          <td colSpan={6} className="px-6 pb-4 pt-2">
-            <div className="bg-gray-900/60 border border-gray-700 rounded-lg p-4 space-y-3">
-              {/* Risk context */}
-              <div>
-                <p className="text-[10px] uppercase tracking-widest text-gray-500 font-mono mb-1.5">Risque détaillé</p>
-                <p className="text-xs text-gray-300">{p.reason}</p>
-              </div>
-              {/* Remediation */}
-              {p.remediation && p.remediation.length > 0 && (
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-gray-500 font-mono mb-2 flex items-center gap-1.5">
-                    <Wrench size={10}/> Solutions recommandées
-                  </p>
-                  <ol className="space-y-1.5">
-                    {p.remediation.map((step, i) => (
-                      <li key={i} className="flex gap-2 text-xs text-gray-300">
-                        <span className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-gray-700 text-gray-400 font-mono text-[10px] font-bold mt-0.5">
-                          {i + 1}
-                        </span>
-                        <span className="font-mono">{step}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              )}
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
+    <div className={`border ${border} rounded-lg overflow-hidden`}>
+      {/* Header */}
+      <div className={`flex items-center gap-3 px-4 py-3 border-b ${border} bg-gray-800/40`}>
+        <span className="font-mono font-bold text-cyan-300 text-lg">{p.port}</span>
+        <span className="font-mono text-yellow-400 text-sm">{p.service || '—'}</span>
+        <span className="font-mono text-gray-600 text-xs uppercase">{p.protocol}</span>
+        <RiskBadge risk={p.risk} />
+      </div>
+
+      {/* Body: 2 columns */}
+      <div className="grid grid-cols-2 divide-x divide-gray-800">
+        {/* Left: Risques */}
+        <div className="p-4">
+          <p className="text-[10px] uppercase tracking-widest text-gray-500 font-mono mb-2 flex items-center gap-1.5">
+            {RISK_ICONS[p.risk]} Risques associés
+          </p>
+          <p className="text-xs text-gray-300 leading-relaxed">{p.reason}</p>
+        </div>
+
+        {/* Right: Plan d'actions */}
+        <div className="p-4">
+          <p className="text-[10px] uppercase tracking-widest text-gray-500 font-mono mb-2 flex items-center gap-1.5">
+            <Wrench size={10}/> Plan d'actions
+          </p>
+          <ol className="space-y-2">
+            {(p.remediation ?? []).map((step, i) => (
+              <li key={i} className="flex gap-2 text-xs text-gray-300">
+                <span className="shrink-0 w-4 h-4 flex items-center justify-center rounded-full bg-gray-700 text-gray-400 font-mono text-[10px] font-bold mt-0.5">
+                  {i + 1}
+                </span>
+                <span className="leading-relaxed">{step}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -189,7 +185,7 @@ export function HostsPorts() {
       </div>
 
       {/* Content */}
-      <div className="px-6 py-6 max-w-4xl">
+      <div className="px-6 py-6 max-w-6xl">
 
         {/* Loading */}
         {isFetching && (
@@ -242,29 +238,15 @@ export function HostsPorts() {
 
                 {/* Groups */}
                 {groups.map(group => (
-                  <div key={group.risk} className="mb-6">
-                    <div className="flex items-center gap-2 mb-2">
+                  <div key={group.risk} className="mb-8">
+                    <div className="flex items-center gap-2 mb-3">
                       {RISK_ICONS[group.risk]}
                       <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 font-mono">
                         {group.label} ({group.ports.length})
                       </h3>
                     </div>
-                    <div className="border border-gray-800 rounded-lg overflow-hidden">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="bg-gray-800/60 text-[10px] uppercase tracking-widest text-gray-500 font-mono">
-                            <th className="px-4 py-2 w-6"/>
-                            <th className="text-left px-2 py-2 w-20">Port</th>
-                            <th className="text-left px-4 py-2 w-16">Proto</th>
-                            <th className="text-left px-4 py-2 w-32">Service</th>
-                            <th className="text-left px-4 py-2 w-24">Risque</th>
-                            <th className="text-left px-4 py-2">Résumé — cliquer pour détails &amp; solutions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {group.ports.map((p, i) => <PortRow key={i} p={p} />)}
-                        </tbody>
-                      </table>
+                    <div className="space-y-4">
+                      {group.ports.map((p, i) => <PortCard key={i} p={p} />)}
                     </div>
                   </div>
                 ))}
