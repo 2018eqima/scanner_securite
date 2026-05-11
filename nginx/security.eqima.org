@@ -1,0 +1,56 @@
+# security.eqima.org — Caido (UI) + OWASP ZAP (API)
+
+server {
+    listen 80;
+    server_name security.eqima.org;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name security.eqima.org;
+
+    ssl_certificate     /etc/letsencrypt/live/security.eqima.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/security.eqima.org/privkey.pem;
+    include             /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
+
+    large_client_header_buffers 8 64k;
+    client_header_buffer_size   64k;
+    proxy_buffer_size           128k;
+    proxy_buffers               8 128k;
+    proxy_busy_buffers_size     256k;
+
+    # ── ZAP API REST ─────────────────────────────────────────
+    location ~ ^/(JSON|XML|HTML|OTHER|GRAPHQL)/ {
+        proxy_pass            http://127.0.0.1:8093;
+        proxy_set_header      Host localhost:8093;
+        proxy_set_header      X-Real-IP $remote_addr;
+        proxy_set_header      X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header      X-Forwarded-Proto $scheme;
+        proxy_read_timeout    300s;
+    }
+
+    # ── Caido — WebSocket ────────────────────────────────────
+    location /socket.io/ {
+        proxy_pass            http://127.0.0.1:8095;
+        proxy_http_version    1.1;
+        proxy_set_header      Upgrade $http_upgrade;
+        proxy_set_header      Connection "upgrade";
+        proxy_set_header      Host $host;
+        proxy_read_timeout    3600s;
+    }
+
+    # ── Caido — Interface principale ─────────────────────────
+    location / {
+        proxy_pass            http://127.0.0.1:8095;
+        proxy_http_version    1.1;
+        proxy_set_header      Upgrade $http_upgrade;
+        proxy_set_header      Connection $http_connection;
+        proxy_set_header      Host $host;
+        proxy_set_header      X-Real-IP $remote_addr;
+        proxy_set_header      X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header      X-Forwarded-Proto $scheme;
+        proxy_read_timeout    300s;
+    }
+}

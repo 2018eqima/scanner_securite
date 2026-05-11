@@ -1,0 +1,60 @@
+services:
+
+  # ── Caido — Interface web moderne ───────────────────────────
+  caido:
+    image: caido/caido:latest
+    container_name: eqimasecurity-caido
+    restart: unless-stopped
+    command: ["caido-cli", "--no-renderer-sandbox", "--no-open", "--listen", "0.0.0.0:8080", "--ui-domain", "security.eqima.org"]
+    ports:
+      - "127.0.0.1:8095:8080"
+    volumes:
+      - caido_data:/home/caido
+    networks:
+      - security-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  # ── OWASP ZAP — Scanner automatisé (daemon + API REST) ──────
+  zap:
+    image: zaproxy/zap-stable
+    container_name: eqimasecurity-zap
+    restart: unless-stopped
+    command: >
+      zap.sh -daemon
+      -host 0.0.0.0
+      -port 8093
+      -config api.key=${ZAP_API_KEY:-changeme}
+      -config api.addrs.addr.name=.*
+      -config api.addrs.addr.regex=true
+      -config api.disablekey=false
+    ports:
+      - "127.0.0.1:8093:8093"
+    volumes:
+      - zap_data:/home/zap/.ZAP
+      - zap_reports:/zap/reports
+    networks:
+      - security-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8093/JSON/core/view/version/?apikey=${ZAP_API_KEY:-changeme} || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  caido_data:
+    name: eqimasecurity-caido-data
+  zap_data:
+    name: eqimasecurity-zap-data
+  zap_reports:
+    name: eqimasecurity-zap-reports
+
+networks:
+  security-net:
+    name: eqimasecurity-network
+    driver: bridge
