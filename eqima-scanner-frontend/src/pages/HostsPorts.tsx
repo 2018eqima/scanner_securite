@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '../api/client'
-import { Server, Search, Loader, Shield, AlertTriangle, Info, Clock } from 'lucide-react'
+import { Server, Search, Loader, Shield, AlertTriangle, Info, Clock, ChevronDown, ChevronRight, Wrench } from 'lucide-react'
 
 type PortEntry = {
   port: number
@@ -10,6 +10,7 @@ type PortEntry = {
   state: string
   risk: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO'
   reason: string
+  remediation: string[]
 }
 
 type ScanResult = {
@@ -51,6 +52,61 @@ function RiskBadge({ risk }: { risk: string }) {
     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border font-mono uppercase ${cls}`}>
       {risk}
     </span>
+  )
+}
+
+function PortRow({ p }: { p: PortEntry }) {
+  const [open, setOpen] = useState(false)
+  const rowBg = p.risk === 'CRITICAL' ? 'bg-red-950/10'
+              : p.risk === 'HIGH'     ? 'bg-orange-950/10'
+              : ''
+  return (
+    <>
+      <tr
+        className={`border-t border-gray-800/50 cursor-pointer hover:bg-gray-800/30 transition-colors ${rowBg}`}
+        onClick={() => setOpen(o => !o)}
+      >
+        <td className="px-4 py-2.5 w-6 text-gray-600">
+          {open ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}
+        </td>
+        <td className="px-2 py-2.5 font-mono font-bold text-cyan-300">{p.port}</td>
+        <td className="px-4 py-2.5 font-mono text-gray-500 uppercase">{p.protocol}</td>
+        <td className="px-4 py-2.5 font-mono text-yellow-400">{p.service || '—'}</td>
+        <td className="px-4 py-2.5"><RiskBadge risk={p.risk} /></td>
+        <td className="px-4 py-2.5 text-gray-400 text-xs">{p.reason}</td>
+      </tr>
+      {open && (
+        <tr className={`border-t border-gray-800/30 ${rowBg}`}>
+          <td colSpan={6} className="px-6 pb-4 pt-2">
+            <div className="bg-gray-900/60 border border-gray-700 rounded-lg p-4 space-y-3">
+              {/* Risk context */}
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-gray-500 font-mono mb-1.5">Risque détaillé</p>
+                <p className="text-xs text-gray-300">{p.reason}</p>
+              </div>
+              {/* Remediation */}
+              {p.remediation && p.remediation.length > 0 && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-gray-500 font-mono mb-2 flex items-center gap-1.5">
+                    <Wrench size={10}/> Solutions recommandées
+                  </p>
+                  <ol className="space-y-1.5">
+                    {p.remediation.map((step, i) => (
+                      <li key={i} className="flex gap-2 text-xs text-gray-300">
+                        <span className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-gray-700 text-gray-400 font-mono text-[10px] font-bold mt-0.5">
+                          {i + 1}
+                        </span>
+                        <span className="font-mono">{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   )
 }
 
@@ -197,30 +253,16 @@ export function HostsPorts() {
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="bg-gray-800/60 text-[10px] uppercase tracking-widest text-gray-500 font-mono">
-                            <th className="text-left px-4 py-2 w-20">Port</th>
+                            <th className="px-4 py-2 w-6"/>
+                            <th className="text-left px-2 py-2 w-20">Port</th>
                             <th className="text-left px-4 py-2 w-16">Proto</th>
                             <th className="text-left px-4 py-2 w-32">Service</th>
                             <th className="text-left px-4 py-2 w-24">Risque</th>
-                            <th className="text-left px-4 py-2">Explication</th>
+                            <th className="text-left px-4 py-2">Résumé — cliquer pour détails &amp; solutions</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {group.ports.map((p, i) => (
-                            <tr
-                              key={i}
-                              className={`border-t border-gray-800/50 ${
-                                p.risk === 'CRITICAL' ? 'bg-red-950/10'
-                                : p.risk === 'HIGH'   ? 'bg-orange-950/10'
-                                : ''
-                              }`}
-                            >
-                              <td className="px-4 py-2.5 font-mono font-bold text-cyan-300">{p.port}</td>
-                              <td className="px-4 py-2.5 font-mono text-gray-500 uppercase">{p.protocol}</td>
-                              <td className="px-4 py-2.5 font-mono text-yellow-400">{p.service || '—'}</td>
-                              <td className="px-4 py-2.5"><RiskBadge risk={p.risk} /></td>
-                              <td className="px-4 py-2.5 text-gray-400">{p.reason}</td>
-                            </tr>
-                          ))}
+                          {group.ports.map((p, i) => <PortRow key={i} p={p} />)}
                         </tbody>
                       </table>
                     </div>
