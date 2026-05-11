@@ -1,11 +1,10 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { LayoutDashboard, Target, ScanSearch, LogOut, ShieldCheck } from 'lucide-react'
+import { LayoutDashboard, ScanSearch, LogOut, ShieldCheck } from 'lucide-react'
 import keycloak from '../auth/keycloak'
 
 const nav = [
-  { to: '/',        icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/targets', icon: Target,          label: 'Cibles' },
-  { to: '/scans',   icon: ScanSearch,      label: 'Scans' },
+  { to: '/',      icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/scans', icon: ScanSearch,      label: 'Scans' },
 ]
 
 export function Layout() {

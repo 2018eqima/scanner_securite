@@ -1,6 +1,5 @@
 package org.eqima.scanner.service;
 
-import org.eqima.scanner.config.TargetsConfig;
 import org.eqima.scanner.dto.ScanEvent;
 import org.eqima.scanner.dto.StartScanRequest;
 import org.eqima.scanner.entity.Finding;
@@ -17,6 +16,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 
+import java.net.URI;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -31,36 +31,39 @@ public class ScanService {
     private final ScanSessionRepository sessionRepo;
     private final FindingRepository findingRepo;
     private final ZapService zapService;
-    private final TargetsConfig targetsConfig;
 
     // Sinks actifs par sessionId — supprimés à la fin du scan
     private final Map<String, Sinks.Many<ScanEvent>> activeSinks = new ConcurrentHashMap<>();
 
     public ScanService(ScanSessionRepository sessionRepo,
                        FindingRepository findingRepo,
-                       ZapService zapService,
-                       TargetsConfig targetsConfig) {
+                       ZapService zapService) {
         this.sessionRepo = sessionRepo;
         this.findingRepo = findingRepo;
         this.zapService = zapService;
-        this.targetsConfig = targetsConfig;
     }
 
     public Mono<ScanSession> startScan(StartScanRequest request) {
         return Mono.fromCallable(() -> {
-            TargetsConfig.Target target = targetsConfig.findById(request.targetId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                            "Target not found: " + request.targetId()));
+            String url = request.url();
+            if (url == null || url.isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "URL requise");
+            }
+            // Normaliser l'URL (ajouter https:// si absent)
+            if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                url = "https://" + url;
+            }
 
-            List<String> urls = (request.selectedUrls() != null && !request.selectedUrls().isEmpty())
-                    ? request.selectedUrls()
-                    : target.getUrls();
+            // Dériver le nom depuis l'URL si non fourni
+            String name = (request.name() != null && !request.name().isBlank())
+                    ? request.name()
+                    : URI.create(url).getHost();
 
             ScanSession session = new ScanSession();
             session.setId(UUID.randomUUID().toString());
-            session.setTargetId(target.getId());
-            session.setTargetName(target.getName());
-            session.setTargetUrl(urls.get(0));
+            session.setTargetId(UUID.randomUUID().toString());
+            session.setTargetName(name);
+            session.setTargetUrl(url);
             session.setStatus(ScanSession.Status.PENDING);
             session.setStartedAt(Instant.now());
 
@@ -69,10 +72,11 @@ public class ScanService {
             Sinks.Many<ScanEvent> sink = Sinks.many().multicast().onBackpressureBuffer(256);
             activeSinks.put(saved.getId(), sink);
 
+            final String finalUrl = url;
             // Lance le scan dans un thread virtuel Java 21
             Thread.ofVirtual()
                     .name("scan-" + saved.getId())
-                    .start(() -> runScan(saved, sink, urls));
+                    .start(() -> runScan(saved, sink, finalUrl));
 
             return saved;
         }).subscribeOn(Schedulers.boundedElastic());
@@ -112,60 +116,46 @@ public class ScanService {
 
     // ── Exécution du scan (thread virtuel) ──────────────────────────────────────
 
-    private void runScan(ScanSession session, Sinks.Many<ScanEvent> sink, List<String> urls) {
+    private void runScan(ScanSession session, Sinks.Many<ScanEvent> sink, String url) {
         try {
             updateStatus(session, ScanSession.Status.RUNNING, 0);
             emit(sink, session.getId(), "STARTED", "Scan démarré pour " + session.getTargetName(), 0);
 
-            int totalUrls = urls.size();
-            int urlIndex = 0;
+            // ── Phase Spider ──────────────────────────────────────────────────
+            emit(sink, session.getId(), "SPIDER_PROGRESS", "Spider en cours : " + url, 0);
+            String spiderId = zapService.startSpider(url).block();
+            session.setZapSpiderId(spiderId);
 
-            for (String url : urls) {
-                urlIndex++;
-                // ── Phase Spider ──────────────────────────────────────────────
-                emit(sink, session.getId(), "SPIDER_PROGRESS", "Spider en cours : " + url, 0);
-                String spiderId = zapService.startSpider(url).block();
-                session.setZapSpiderId(spiderId);
+            pollProgress(spiderId, "SPIDER_PROGRESS", session, sink,
+                    (id) -> zapService.getSpiderProgress(id).block());
 
-                pollProgress(spiderId, "SPIDER_PROGRESS", session, sink,
-                        (id) -> zapService.getSpiderProgress(id).block());
+            // ── Phase Scan actif ──────────────────────────────────────────────
+            emit(sink, session.getId(), "SCAN_PROGRESS", "Scan actif en cours : " + url, 0);
+            String scanId = zapService.startActiveScan(url).block();
+            session.setZapScanId(scanId);
+            sessionRepo.save(session);
 
-                // ── Phase Scan actif ──────────────────────────────────────────
-                emit(sink, session.getId(), "SCAN_PROGRESS", "Scan actif en cours : " + url, 0);
-                String scanId = zapService.startActiveScan(url).block();
-                session.setZapScanId(scanId);
-                sessionRepo.save(session);
+            pollProgress(scanId, "SCAN_PROGRESS", session, sink,
+                    (id) -> zapService.getScanProgress(id).block());
 
-                int baseProgress = (urlIndex - 1) * 100 / totalUrls;
-                pollProgress(scanId, "SCAN_PROGRESS", session, sink,
-                        (id) -> {
-                            int p = zapService.getScanProgress(id).block();
-                            // Ramener la progression à la tranche de cette URL
-                            return baseProgress + p / totalUrls;
-                        });
-            }
-
-            // ── Collecte des alertes ─────────────────────────────────────────
+            // ── Collecte des alertes ──────────────────────────────────────────
             emit(sink, session.getId(), "SCAN_PROGRESS", "Collecte des findings...", 95);
-            List<Finding> allFindings = new java.util.ArrayList<>();
-            for (String url : urls) {
-                List<Finding> findings = zapService.getAlerts(url, session.getId()).block();
-                if (findings != null) allFindings.addAll(findings);
+            List<Finding> findings = zapService.getAlerts(url, session.getId()).block();
+            if (findings == null) findings = List.of();
+
+            if (!findings.isEmpty()) {
+                findingRepo.saveAll(findings);
             }
 
-            if (!allFindings.isEmpty()) {
-                findingRepo.saveAll(allFindings);
-            }
-
-            // ── Finalisation ─────────────────────────────────────────────────
-            session.setTotalFindings(allFindings.size());
+            // ── Finalisation ──────────────────────────────────────────────────
+            session.setTotalFindings(findings.size());
             session.setStatus(ScanSession.Status.COMPLETED);
             session.setCompletedAt(Instant.now());
             session.setProgress(100);
             sessionRepo.save(session);
 
             emit(sink, session.getId(), "COMPLETED",
-                    "Scan terminé — " + allFindings.size() + " finding(s)", 100);
+                    "Scan terminé — " + findings.size() + " finding(s)", 100);
 
         } catch (Exception e) {
             log.error("Erreur scan session {}", session.getId(), e);

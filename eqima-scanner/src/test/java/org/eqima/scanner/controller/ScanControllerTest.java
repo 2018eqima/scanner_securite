@@ -51,12 +51,11 @@ class ScanControllerTest {
         webTestClient.post()
                 .uri("/v1/scans")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new StartScanRequest("volanaka", null, null))
+                .bodyValue(new StartScanRequest("https://example.com", "Test Scan"))
                 .exchange()
                 .expectStatus().isCreated()
                 .expectBody()
                 .jsonPath("$.id").isEqualTo("abc-123")
-                .jsonPath("$.targetId").isEqualTo("volanaka")
                 .jsonPath("$.status").isEqualTo("PENDING");
     }
 
@@ -68,7 +67,7 @@ class ScanControllerTest {
         webTestClient.post()
                 .uri("/v1/scans")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new StartScanRequest("volanaka", null, null))
+                .bodyValue(new StartScanRequest("https://example.com", "Test Scan"))
                 .exchange()
                 .expectStatus().is5xxServerError();
     }
