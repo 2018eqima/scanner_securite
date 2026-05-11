@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import {
   Network, Server, Shield, AlertTriangle, CheckCircle,
-  Play, Loader, ChevronDown, ChevronRight, Globe, RefreshCw
+  Play, Loader, ChevronDown, ChevronRight, RefreshCw, Bug, ExternalLink
 } from 'lucide-react'
 
 type GvmStatus = {
@@ -21,6 +20,23 @@ type InfraTask = {
   status: string
   progress: number
   lastReport: string
+}
+
+type ThreatIntel = {
+  target: string
+  threatLevel: 'clean' | 'medium' | 'high' | 'critical' | 'unknown'
+  urlhausListed?: boolean
+  urlhausReference?: string
+  spamhausDbl?: string
+  surbl?: string
+  tags?: string[]
+  malwareUrls?: { url: string; status: string; threat: string; dateAdded: string }[]
+  feodoListed?: boolean
+  feodoMalware?: string
+  feodoStatus?: string
+  feodoFirstSeen?: string
+  feodoCountry?: string
+  error?: string
 }
 
 type InfraResult = {
@@ -79,11 +95,110 @@ function ResultRow({ r }: { r: InfraResult }) {
   )
 }
 
+const THREAT_LEVEL_COLORS = {
+  clean:    'text-green-400 border-green-800 bg-green-950/30',
+  medium:   'text-yellow-400 border-yellow-800 bg-yellow-950/30',
+  high:     'text-orange-400 border-orange-800 bg-orange-950/30',
+  critical: 'text-red-400 border-red-800 bg-red-950/30',
+  unknown:  'text-gray-400 border-gray-700 bg-gray-900',
+}
+
+const THREAT_LEVEL_LABELS = {
+  clean:    'Propre',
+  medium:   'Suspect',
+  high:     'Dangereux',
+  critical: 'Critique',
+  unknown:  'Inconnu',
+}
+
+function ThreatIntelPanel({ ti }: { ti: ThreatIntel }) {
+  const cls = THREAT_LEVEL_COLORS[ti.threatLevel] ?? THREAT_LEVEL_COLORS.unknown
+  const label = THREAT_LEVEL_LABELS[ti.threatLevel] ?? '?'
+  return (
+    <div className={`border rounded-lg p-4 mb-4 ${cls}`}>
+      <div className="flex items-center gap-2 mb-3">
+        <Bug size={16} />
+        <span className="font-bold text-sm uppercase tracking-widest font-mono">Threat Intelligence</span>
+        <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded border font-mono uppercase ${cls}`}>
+          {label}
+        </span>
+      </div>
+
+      {ti.error && (
+        <p className="text-xs text-gray-500 font-mono">Erreur: {ti.error}</p>
+      )}
+
+      {/* Feodo Tracker — botnet C2 */}
+      {ti.feodoListed && (
+        <div className="mb-3 p-2 bg-red-950/50 rounded border border-red-800">
+          <p className="text-xs font-bold text-red-300 mb-1 uppercase tracking-widest">Botnet C2 (Feodo Tracker)</p>
+          <p className="text-xs font-mono text-red-200">Malware: <span className="text-white">{ti.feodoMalware}</span></p>
+          <p className="text-xs font-mono text-red-200">Statut: <span className="text-white">{ti.feodoStatus}</span></p>
+          <p className="text-xs font-mono text-red-200">Premier vu: {ti.feodoFirstSeen} — {ti.feodoCountry}</p>
+        </div>
+      )}
+
+      {/* URLhaus */}
+      {ti.urlhausListed && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-gray-400 font-mono">URLhaus:</span>
+            <a href={ti.urlhausReference} target="_blank" rel="noopener noreferrer"
+               className="text-xs text-cyan-400 hover:underline flex items-center gap-1">
+              Rapport <ExternalLink size={10} />
+            </a>
+            {ti.spamhausDbl && ti.spamhausDbl !== 'not listed' && (
+              <span className="text-[10px] bg-orange-900/50 text-orange-300 border border-orange-700 px-1.5 py-0.5 rounded font-mono">
+                Spamhaus: {ti.spamhausDbl}
+              </span>
+            )}
+            {ti.surbl && ti.surbl !== 'not listed' && (
+              <span className="text-[10px] bg-orange-900/50 text-orange-300 border border-orange-700 px-1.5 py-0.5 rounded font-mono">
+                SURBL: {ti.surbl}
+              </span>
+            )}
+          </div>
+          {ti.tags && ti.tags.length > 0 && (
+            <div className="flex gap-1 flex-wrap">
+              {ti.tags.map((t, i) => (
+                <span key={i} className="text-[10px] bg-gray-800 text-gray-300 border border-gray-700 px-1.5 py-0.5 rounded font-mono">
+                  {t}
+                </span>
+              ))}
+            </div>
+          )}
+          {ti.malwareUrls && ti.malwareUrls.length > 0 && (
+            <div>
+              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-mono mb-1">URLs malveillantes</p>
+              <div className="space-y-1">
+                {ti.malwareUrls.map((u, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs font-mono">
+                    <span className={`shrink-0 text-[10px] px-1 py-0.5 rounded border font-bold ${
+                      u.status === 'online' ? 'bg-red-900/60 text-red-300 border-red-700' : 'bg-gray-800 text-gray-500 border-gray-700'
+                    }`}>{u.status}</span>
+                    <span className="text-gray-400 truncate flex-1">{u.url}</span>
+                    {u.threat && <span className="shrink-0 text-orange-400">{u.threat}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {ti.threatLevel === 'clean' && !ti.error && (
+        <p className="text-xs text-green-400 font-mono">Aucun indicateur de compromission détecté.</p>
+      )}
+    </div>
+  )
+}
+
 export function InfraNetwork() {
   const queryClient = useQueryClient()
   const [target, setTarget] = useState('')
   const [name, setName] = useState('')
   const [selectedTask, setSelectedTask] = useState<string | null>(null)
+  const [scanTarget, setScanTarget] = useState<string | null>(null)
 
   const { data: status } = useQuery<GvmStatus>({
     queryKey: ['infra-status'],
@@ -109,9 +224,17 @@ export function InfraNetwork() {
     staleTime: 30_000,
   })
 
+  const { data: threatIntel, isFetching: tiLoading } = useQuery<ThreatIntel>({
+    queryKey: ['infra-threat-intel', scanTarget],
+    queryFn: () => api.get(`/v1/infra/threat-intel?target=${encodeURIComponent(scanTarget!)}`).then(r => r.data),
+    enabled: !!scanTarget,
+    staleTime: 5 * 60_000,
+  })
+
   const { mutate: launchScan, isPending: launching } = useMutation({
     mutationFn: () => api.post('/v1/infra/scan', { target, name: name || target }).then(r => r.data),
     onSuccess: () => {
+      setScanTarget(target)
       setTarget('')
       setName('')
       queryClient.invalidateQueries({ queryKey: ['infra-tasks'] })
@@ -171,6 +294,13 @@ export function InfraNetwork() {
               {launching ? <Loader size={14} className="animate-spin" /> : <Play size={14} />}
               Lancer le scan
             </button>
+            <button
+              onClick={() => setScanTarget(target)}
+              disabled={!target}
+              className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-40 text-gray-300 text-sm py-2 rounded transition-colors"
+            >
+              <Bug size={14} /> Threat Intel uniquement
+            </button>
             {!status?.available && (
               <p className="text-[10px] text-red-400 mt-1 text-center">OpenVAS non disponible</p>
             )}
@@ -218,6 +348,18 @@ export function InfraNetwork() {
         <div className="flex-1 flex flex-col overflow-hidden">
           {selectedTask ? (
             <>
+              {/* Threat Intel */}
+              {(threatIntel || tiLoading) && (
+                <div className="px-4 pt-4">
+                  {tiLoading
+                    ? <div className="flex items-center gap-2 text-xs text-gray-500 font-mono mb-4">
+                        <Loader size={12} className="animate-spin" /> Analyse threat intelligence...
+                      </div>
+                    : threatIntel && <ThreatIntelPanel ti={threatIntel} />
+                  }
+                </div>
+              )}
+
               {/* Stats */}
               {results.length > 0 && (
                 <div className="flex items-center gap-6 px-6 py-3 bg-gray-950 border-b border-gray-800">
