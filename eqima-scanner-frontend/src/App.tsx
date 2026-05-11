@@ -9,6 +9,7 @@ import { ScanDetail }      from './pages/ScanDetail'
 import { AttackSurface }   from './pages/AttackSurface'
 import { AttackSurfaceSelector } from './pages/AttackSurfaceSelector'
 import { InfraNetwork }    from './pages/InfraNetwork'
+import { HostsPorts }      from './pages/HostsPorts'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,6 +33,7 @@ export default function App() {
             </Route>
             <Route path="attack-surface" element={<AttackSurfaceSelector />} />
             <Route path="infra" element={<InfraNetwork />} />
+            <Route path="hosts-ports" element={<HostsPorts />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
