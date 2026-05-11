@@ -1,17 +1,73 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { scanApi } from '../api/scans'
 import { StatusBadge } from '../components/StatusBadge'
 import { ProgressBar } from '../components/ProgressBar'
-import { Plus, Loader } from 'lucide-react'
+import { ScanSession } from '../types'
+import { Plus, Loader, RotateCcw, FileText, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+
+function computeDeltas(sessions: ScanSession[]): Map<string, number | null> {
+  // Grouper par targetUrl, trié par date décroissante (sessions l'est déjà)
+  const byUrl = new Map<string, ScanSession[]>()
+  sessions.forEach(s => {
+    const key = s.targetUrl
+    if (!byUrl.has(key)) byUrl.set(key, [])
+    byUrl.get(key)!.push(s)
+  })
+
+  const deltas = new Map<string, number | null>()
+  sessions.forEach(s => {
+    const group = byUrl.get(s.targetUrl) || []
+    const idx = group.findIndex(x => x.id === s.id)
+    const prev = group[idx + 1] // le suivant dans la liste triée DESC = scan précédent
+    if (prev && s.status === 'COMPLETED' && prev.status === 'COMPLETED') {
+      deltas.set(s.id, s.totalFindings - prev.totalFindings)
+    } else {
+      deltas.set(s.id, null)
+    }
+  })
+  return deltas
+}
+
+function DeltaBadge({ delta }: { delta: number | null }) {
+  if (delta === null) return null
+  if (delta === 0) return (
+    <span className="flex items-center gap-0.5 text-xs text-gray-400 ml-1">
+      <Minus size={11} /> 0
+    </span>
+  )
+  if (delta > 0) return (
+    <span className="flex items-center gap-0.5 text-xs text-red-500 font-semibold ml-1">
+      <TrendingUp size={11} /> +{delta}
+    </span>
+  )
+  return (
+    <span className="flex items-center gap-0.5 text-xs text-green-600 font-semibold ml-1">
+      <TrendingDown size={11} /> {delta}
+    </span>
+  )
+}
 
 export function ScansList() {
-  const navigate = useNavigate()
+  const navigate     = useNavigate()
+  const queryClient  = useQueryClient()
+
   const { data: sessions = [], isLoading } = useQuery({
     queryKey: ['scans'],
     queryFn: scanApi.list,
     refetchInterval: 5000,
   })
+
+  const { mutate: relaunch, isPending: relaunching } = useMutation({
+    mutationFn: ({ url, name }: { url: string; name: string }) =>
+      scanApi.start(url, name),
+    onSuccess: (newSession) => {
+      queryClient.invalidateQueries({ queryKey: ['scans'] })
+      navigate(`/scans/${newSession.id}`)
+    },
+  })
+
+  const deltas = computeDeltas(sessions)
 
   return (
     <div className="p-8">
@@ -45,6 +101,7 @@ export function ScansList() {
                 <th className="px-6 py-3 text-left">Progression</th>
                 <th className="px-6 py-3 text-left">Findings</th>
                 <th className="px-6 py-3 text-left">Lancé le</th>
+                <th className="px-6 py-3 text-left">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -64,12 +121,42 @@ export function ScansList() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    {s.totalFindings > 0
-                      ? <span className="font-bold text-orange-600">{s.totalFindings}</span>
-                      : <span className="text-gray-300">—</span>}
+                    <div className="flex items-center">
+                      {s.totalFindings > 0
+                        ? <span className="font-bold text-orange-600">{s.totalFindings}</span>
+                        : <span className="text-gray-300">—</span>}
+                      <DeltaBadge delta={deltas.get(s.id) ?? null} />
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-gray-400 text-xs">
                     {new Date(s.startedAt).toLocaleString('fr-FR')}
+                  </td>
+                  <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center gap-2">
+                      {/* PDF */}
+                      {s.status === 'COMPLETED' && (
+                        <a
+                          href={scanApi.reportUrl(s.id)}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Télécharger le rapport PDF"
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                        >
+                          <FileText size={16} />
+                        </a>
+                      )}
+                      {/* Relancer */}
+                      {(s.status === 'COMPLETED' || s.status === 'FAILED') && (
+                        <button
+                          onClick={() => relaunch({ url: s.targetUrl, name: s.targetName })}
+                          disabled={relaunching}
+                          title="Relancer le scan"
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-brand-50 transition-colors disabled:opacity-40"
+                        >
+                          <RotateCcw size={16} className={relaunching ? 'animate-spin' : ''} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
