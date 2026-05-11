@@ -33,3 +33,14 @@ bin/
 .env
 nginx/certs/
 nginx/logs/
+
+### Frontend ###
+eqima-scanner-frontend/node_modules/
+eqima-scanner-frontend/dist/
+
+### Backend ###
+eqima-scanner/target/
+
+### IDE ###
+.idea/
+*.iml
