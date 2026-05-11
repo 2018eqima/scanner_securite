@@ -14,7 +14,8 @@ RUN mvn clean package -DskipTests -q
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-RUN addgroup -S scanner && adduser -S scanner -G scanner
+RUN apk add --no-cache nmap && \
+    addgroup -S scanner && adduser -S scanner -G scanner
 USER scanner
 
 COPY --from=build /app/target/*.jar app.jar
