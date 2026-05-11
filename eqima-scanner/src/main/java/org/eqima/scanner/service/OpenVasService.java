@@ -127,47 +127,63 @@ public class OpenVasService {
         String authCommand = String.format(
                 "<authenticate><credentials><username>%s</username><password>%s</password></credentials></authenticate>",
                 escapeXml(gvmdUser), escapeXml(gvmdPassword));
-        // Authentification + commande en une seule session
-        return sendGmpCommands(authCommand, command);
-    }
-
-    private String sendGmpCommand(String command) throws Exception {
-        return sendGmpCommands(command);
-    }
-
-    private String sendGmpCommands(String... commands) throws Exception {
         try (Socket socket = new Socket(gvmdHost, gvmdPort);
              OutputStream out = socket.getOutputStream();
              InputStream in = socket.getInputStream()) {
-
             socket.setSoTimeout(30000);
-            StringBuilder allResponses = new StringBuilder();
-
-            for (String cmd : commands) {
-                byte[] bytes = cmd.getBytes(StandardCharsets.UTF_8);
-                out.write(bytes);
-                out.flush();
-                // Lire la réponse
-                byte[] buf = new byte[65536];
-                StringBuilder resp = new StringBuilder();
-                int read;
-                long start = System.currentTimeMillis();
-                while (System.currentTimeMillis() - start < 10000) {
-                    if (in.available() > 0) {
-                        read = in.read(buf);
-                        if (read == -1) break;
-                        resp.append(new String(buf, 0, read, StandardCharsets.UTF_8));
-                        // Vérifier si la réponse XML est complète
-                        String s = resp.toString().trim();
-                        if (s.length() > 10 && !s.endsWith(">")) continue;
-                        break;
-                    }
-                    Thread.sleep(100);
-                }
-                allResponses.append(resp);
-            }
-            return allResponses.toString();
+            // Send auth, read and discard auth response
+            out.write(authCommand.getBytes(StandardCharsets.UTF_8));
+            out.flush();
+            readGmpResponse(in);
+            // Send actual command, return its response
+            out.write(command.getBytes(StandardCharsets.UTF_8));
+            out.flush();
+            return readGmpResponse(in);
         }
+    }
+
+    private String sendGmpCommand(String command) throws Exception {
+        try (Socket socket = new Socket(gvmdHost, gvmdPort);
+             OutputStream out = socket.getOutputStream();
+             InputStream in = socket.getInputStream()) {
+            socket.setSoTimeout(30000);
+            out.write(command.getBytes(StandardCharsets.UTF_8));
+            out.flush();
+            return readGmpResponse(in);
+        }
+    }
+
+    private String readGmpResponse(InputStream in) throws Exception {
+        StringBuilder resp = new StringBuilder();
+        byte[] buf = new byte[65536];
+        long start = System.currentTimeMillis();
+        while (System.currentTimeMillis() - start < 15000) {
+            if (in.available() > 0) {
+                int read = in.read(buf);
+                if (read == -1) break;
+                resp.append(new String(buf, 0, read, StandardCharsets.UTF_8));
+                // Check if we have a complete XML document (ends with closing root tag)
+                String s = resp.toString().trim();
+                if (s.endsWith(">") && isCompleteXml(s)) break;
+            } else {
+                String s = resp.toString().trim();
+                if (s.endsWith(">") && s.length() > 10 && isCompleteXml(s)) break;
+                Thread.sleep(50);
+            }
+        }
+        return resp.toString().trim();
+    }
+
+    private boolean isCompleteXml(String xml) {
+        // Quick heuristic: count open vs close tags of the root element
+        if (xml.isEmpty() || !xml.startsWith("<")) return false;
+        int firstSpace = xml.indexOf(' ');
+        int firstClose = xml.indexOf('>');
+        if (firstClose < 0) return false;
+        // Self-closing root
+        if (xml.charAt(firstClose - 1) == '/') return true;
+        String rootTag = xml.substring(1, firstSpace > 0 && firstSpace < firstClose ? firstSpace : firstClose);
+        return xml.contains("</" + rootTag + ">");
     }
 
     // ─── Parsers XML ─────────────────────────────────────────────────────────
