@@ -323,7 +323,7 @@ export function InfraNetwork() {
             <button
               onClick={() => setScanTarget(target)}
               disabled={!target}
-              className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-40 text-gray-300 text-sm py-2 rounded transition-colors"
+              className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-40 text-gray-300 text-sm py-2 rounded transition-colors mt-2"
             >
               <Bug size={14} /> Threat Intel uniquement
             </button>
@@ -331,6 +331,18 @@ export function InfraNetwork() {
               <p className="text-[10px] text-red-400 mt-1 text-center">OpenVAS non disponible</p>
             )}
           </div>
+
+          {/* Threat Intel résultats */}
+          {(tiLoading || threatIntel) && (
+            <div className="px-4 py-3 border-b border-gray-800 overflow-y-auto max-h-80">
+              {tiLoading
+                ? <div className="flex items-center gap-2 text-xs text-gray-500 font-mono py-2">
+                    <Loader size={12} className="animate-spin" /> Analyse threat intelligence…
+                  </div>
+                : threatIntel && <ThreatIntelPanel ti={threatIntel} />
+              }
+            </div>
+          )}
 
           {/* Liste des tâches */}
           <div className="flex-1 overflow-auto">
@@ -372,19 +384,9 @@ export function InfraNetwork() {
 
         {/* Panneau droit : résultats */}
         <div className="flex-1 flex flex-col overflow-hidden">
+
           {selectedTask ? (
             <>
-              {/* Threat Intel */}
-              {(threatIntel || tiLoading) && (
-                <div className="px-4 pt-4">
-                  {tiLoading
-                    ? <div className="flex items-center gap-2 text-xs text-gray-500 font-mono mb-4">
-                        <Loader size={12} className="animate-spin" /> Analyse threat intelligence...
-                      </div>
-                    : threatIntel && <ThreatIntelPanel ti={threatIntel} />
-                  }
-                </div>
-              )}
 
               {/* Stats */}
               {results.length > 0 && (
