@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '../api/client'
+import keycloak from '../auth/keycloak'
 import {
   Search, Loader, CheckCircle, AlertTriangle, Shield,
   Globe, FileWarning, Wifi, Clock, ChevronDown, ChevronRight,
@@ -164,7 +165,8 @@ export function AttackSurfaceV2() {
   useEffect(() => {
     if (!jobId) return
 
-    const es = new EventSource(`${import.meta.env.VITE_API_URL ?? 'https://api-scanner.eqima.org'}/v1/surface/scan/${jobId}/stream`)
+    const token = keycloak.token ?? ''
+    const es = new EventSource(`${import.meta.env.VITE_API_URL ?? 'https://api-scanner.eqima.org'}/v1/surface/scan/${jobId}/stream?access_token=${token}`)
 
     const handle = (type: string) => (e: MessageEvent) => {
       if (type === 'phase') setSsePhase(e.data)
