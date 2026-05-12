@@ -270,82 +270,85 @@ export function AttackSurfaceV2() {
         </p>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
-
-        {/* Left: live log + job list */}
-        <div className="w-80 border-r border-gray-800 flex flex-col shrink-0">
-
-          {/* Live log */}
-          {jobId && (
-            <div className="flex flex-col border-b border-gray-800" style={{ minHeight: '40%', maxHeight: '55%' }}>
-              <div className="flex items-center justify-between px-4 py-2 bg-gray-800/40">
-                <span className="text-[10px] uppercase tracking-widest text-gray-500 font-mono">Log temps réel</span>
-                {job?.status === 'RUNNING' && <Loader size={10} className="animate-spin text-red-400"/>}
-                {job?.status === 'DONE'    && <CheckCircle size={10} className="text-green-400"/>}
-                {job?.status === 'FAILED'  && <AlertTriangle size={10} className="text-red-400"/>}
-              </div>
-              {job && (
-                <div className="px-4 py-1.5 border-b border-gray-800/50">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="flex-1 h-1 bg-gray-800 rounded overflow-hidden">
-                      <div className="h-full bg-red-600 transition-all" style={{ width: `${job.progress}%` }}/>
-                    </div>
-                    <span className="text-[10px] font-mono text-gray-500">{job.progress}%</span>
-                  </div>
-                  <p className="text-[10px] text-gray-500 font-mono truncate">{job.currentPhase}</p>
-                </div>
-              )}
-              <div ref={logRef} className="flex-1 overflow-auto px-3 py-2 space-y-0.5 font-mono text-[10px]">
-                {sseLog.map((e, i) => (
-                  <div key={i} className={
-                    e.type === 'phase'   ? 'text-red-400 font-bold pt-1' :
-                    e.type === 'finding' ? 'text-orange-300' :
-                    e.type === 'error'   ? 'text-red-400' :
-                    e.type === 'done'    ? 'text-green-400 font-bold' :
-                    'text-gray-500'
-                  }>
-                    {e.type === 'phase' ? '▶ ' : e.type === 'finding' ? '⚠ ' : '  '}{
-                      (() => {
-                        try { const p = JSON.parse(e.data); return p.title ?? p.phase ?? e.data }
-                        catch { return e.data }
-                      })()
+      {/* Historique — toujours visible sous le formulaire */}
+      {pastJobs.length > 0 && !jobId && (
+        <div className="px-6 py-4 border-b border-gray-800 shrink-0">
+          <p className="text-[10px] uppercase tracking-widest text-gray-500 font-mono mb-3">Historique des scans</p>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
+            {pastJobs.map(j => {
+              const r = j.status === 'DONE' ? getRating(j.riskScore) : null
+              return (
+                <button
+                  key={j.id}
+                  onClick={() => setJobId(j.id)}
+                  className={`text-left rounded-xl border p-4 hover:bg-gray-800/50 transition-colors ${r ? r.border + ' ' + r.bg : 'border-gray-700 bg-gray-800/20'}`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    {r
+                      ? <span className={`text-3xl font-black font-mono leading-none ${r.text}`}>{r.grade}</span>
+                      : <span className={`text-xs font-mono px-2 py-0.5 rounded ${j.status === 'FAILED' ? 'text-red-400 bg-red-950/40' : 'text-yellow-400 bg-yellow-950/40'}`}>{j.status}</span>
                     }
+                    {r && <span className={`text-[10px] font-mono font-bold ${r.text}`}>{r.label}</span>}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Past jobs */}
-          <div className="flex-1 overflow-auto">
-            <p className="text-[10px] text-gray-600 uppercase tracking-widest font-mono px-4 py-2 border-b border-gray-800">
-              Scans précédents
-            </p>
-            {pastJobs.map(j => (
-              <button
-                key={j.id}
-                onClick={() => setJobId(j.id)}
-                className={`w-full text-left px-4 py-2.5 border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors ${jobId === j.id ? 'bg-gray-800/50 border-l-2 border-l-red-600' : ''}`}
-              >
-                <div className="flex items-center gap-2">
-                  {j.status === 'DONE' && <RatingBadge score={j.riskScore} size="sm" />}
-                  <p className="text-xs text-gray-200 font-mono truncate flex-1">{j.domain}</p>
-                </div>
-                <div className="flex items-center gap-2 mt-0.5 ml-8">
-                  <span className={`text-[10px] font-mono ${j.status === 'DONE' ? 'text-green-400' : j.status === 'FAILED' ? 'text-red-400' : 'text-yellow-400'}`}>
-                    {j.status}
-                  </span>
-                  {j.findingCount > 0 && (
-                    <span className="text-[10px] text-orange-400">{j.findingCount} findings</span>
+                  <p className="text-sm font-mono text-gray-200 truncate">{j.domain}</p>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    {j.findingCount > 0 && <span className="text-[10px] text-orange-400">{j.findingCount} findings</span>}
+                    {r && <span className="text-[10px] text-gray-600">score {j.riskScore}</span>}
+                  </div>
+                  {r && (
+                    <div className="mt-2 h-1 bg-gray-800 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${r.bar}`} style={{ width: `${Math.min(j.riskScore / 10, 100)}%` }}/>
+                    </div>
                   )}
-                  {j.status === 'DONE' && (
-                    <span className="text-[10px] text-gray-600">{getRating(j.riskScore).label}</span>
-                  )}
-                </div>
-              </button>
-            ))}
+                </button>
+              )
+            })}
           </div>
         </div>
+      )}
+
+      <div className="flex-1 flex overflow-hidden">
+
+        {/* Left: live log (only during active scan) */}
+        {jobId && (
+          <div className="w-72 border-r border-gray-800 flex flex-col shrink-0">
+            <div className="flex items-center justify-between px-4 py-2 bg-gray-800/40">
+              <span className="text-[10px] uppercase tracking-widest text-gray-500 font-mono">Log temps réel</span>
+              {job?.status === 'RUNNING' && <Loader size={10} className="animate-spin text-red-400"/>}
+              {job?.status === 'DONE'    && <CheckCircle size={10} className="text-green-400"/>}
+              {job?.status === 'FAILED'  && <AlertTriangle size={10} className="text-red-400"/>}
+            </div>
+            {job && (
+              <div className="px-4 py-1.5 border-b border-gray-800/50">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="flex-1 h-1 bg-gray-800 rounded overflow-hidden">
+                    <div className="h-full bg-red-600 transition-all" style={{ width: `${job.progress}%` }}/>
+                  </div>
+                  <span className="text-[10px] font-mono text-gray-500">{job.progress}%</span>
+                </div>
+                <p className="text-[10px] text-gray-500 font-mono truncate">{job.currentPhase}</p>
+              </div>
+            )}
+            <div ref={logRef} className="flex-1 overflow-auto px-3 py-2 space-y-0.5 font-mono text-[10px]">
+              {sseLog.map((e, i) => (
+                <div key={i} className={
+                  e.type === 'phase'   ? 'text-red-400 font-bold pt-1' :
+                  e.type === 'finding' ? 'text-orange-300' :
+                  e.type === 'error'   ? 'text-red-400' :
+                  e.type === 'done'    ? 'text-green-400 font-bold' :
+                  'text-gray-500'
+                }>
+                  {e.type === 'phase' ? '▶ ' : e.type === 'finding' ? '⚠ ' : '  '}{
+                    (() => {
+                      try { const p = JSON.parse(e.data); return p.title ?? p.phase ?? e.data }
+                      catch { return e.data }
+                    })()
+                  }
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Right: results */}
         <div className="flex-1 overflow-auto px-0 py-0">
@@ -456,12 +459,24 @@ export function AttackSurfaceV2() {
             </div>
           )}
 
-          {/* Empty */}
+          {/* Empty — no job selected */}
           {!jobId && (
             <div className="flex flex-col items-center justify-center h-full text-gray-700">
               <Radar size={56} className="mb-4 opacity-20"/>
               <p className="font-mono text-sm">Saisissez un domaine et lancez le scan</p>
               <p className="text-xs mt-1">DNS · crt.sh · ASN · Wayback · TLS · HTTP · Fichiers sensibles</p>
+            </div>
+          )}
+
+          {/* Back button when viewing a past job */}
+          {jobId && job?.status === 'DONE' && (
+            <div className="px-6 pt-4">
+              <button
+                onClick={() => setJobId(null)}
+                className="text-[10px] text-gray-500 hover:text-gray-300 font-mono flex items-center gap-1 mb-2"
+              >
+                ← retour à l'historique
+              </button>
             </div>
           )}
         </div>
