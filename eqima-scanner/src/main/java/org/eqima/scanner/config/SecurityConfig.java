@@ -11,6 +11,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.server.authentication.ServerBearerTokenAuthenticationConverter;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
@@ -42,9 +43,17 @@ public class SecurityConfig {
                         .anyExchange().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
+                        .bearerTokenConverter(sseAwareBearerTokenConverter())
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(keycloakJwtConverter()))
                 )
                 .build();
+    }
+
+    /** Accept Bearer token from Authorization header OR ?access_token= query param (needed for EventSource/SSE) */
+    private ServerBearerTokenAuthenticationConverter sseAwareBearerTokenConverter() {
+        ServerBearerTokenAuthenticationConverter converter = new ServerBearerTokenAuthenticationConverter();
+        converter.setAllowUriQueryParameter(true);
+        return converter;
     }
 
     private ReactiveJwtAuthenticationConverter keycloakJwtConverter() {
