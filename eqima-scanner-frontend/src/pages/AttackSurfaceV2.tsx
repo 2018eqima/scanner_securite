@@ -124,8 +124,50 @@ function ScoreGauge({ score }: { score: number }) {
   )
 }
 
+// Detect sensitive variable names in .env content
+const SENSITIVE_KEYS = /password|passwd|secret|token|key|api_key|apikey|auth|credential|private|pwd|pass|db_pass|database_url|smtp|twilio|stripe|aws|firebase|jwt|access_token|refresh_token/i
+
+function EnvFileViewer({ content }: { content: string }) {
+  const lines = content.split('\n')
+  return (
+    <div className="rounded-lg overflow-hidden border border-red-800/60 bg-gray-950">
+      <div className="flex items-center gap-2 px-3 py-2 bg-red-950/60 border-b border-red-800/60">
+        <AlertTriangle size={12} className="text-red-400 shrink-0"/>
+        <span className="text-[10px] font-mono font-bold text-red-300 uppercase tracking-wider">
+          Contenu accessible publiquement — données exposées
+        </span>
+      </div>
+      <div className="px-3 py-2 font-mono text-[11px] space-y-0.5 max-h-80 overflow-auto">
+        {lines.map((line, i) => {
+          if (!line.trim() || line.trim().startsWith('#')) {
+            return <div key={i} className="text-gray-600">{line || ' '}</div>
+          }
+          const eqIdx = line.indexOf('=')
+          if (eqIdx === -1) return <div key={i} className="text-gray-400">{line}</div>
+          const key = line.substring(0, eqIdx)
+          const val = line.substring(eqIdx + 1)
+          const isSensitive = SENSITIVE_KEYS.test(key)
+          return (
+            <div key={i} className={`flex gap-0 ${isSensitive ? 'bg-red-950/40 rounded px-1 -mx-1' : ''}`}>
+              <span className={isSensitive ? 'text-red-300 font-bold' : 'text-cyan-400'}>{key}</span>
+              <span className="text-gray-500">=</span>
+              <span className={isSensitive ? 'text-yellow-300 font-bold' : 'text-green-300'}>{val}</span>
+              {isSensitive && <span className="text-red-500 ml-2 text-[9px] uppercase">⚠ exposé</span>}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function FindingRow({ f }: { f: Finding }) {
   const [open, setOpen] = useState(false)
+  // Extract raw file content from evidence (after the "HTTP 200 — /path\n\n" prefix)
+  const envContent = f.category === 'SENSITIVE_FILE' && f.evidence
+    ? f.evidence.includes('\n\n') ? f.evidence.split('\n\n').slice(1).join('\n\n') : null
+    : null
+  const isEnvFile = envContent && (f.title.includes('.env') || f.title.includes('config') || f.title.includes('backup'))
   return (
     <div className="border-b border-gray-800/50">
       <div
@@ -144,12 +186,17 @@ function FindingRow({ f }: { f: Finding }) {
             <p className="text-[10px] uppercase tracking-widest text-gray-600 font-mono mb-1">Description</p>
             <p className="text-xs text-gray-300 leading-relaxed">{f.description}</p>
           </div>
-          {f.evidence && (
+          {isEnvFile && envContent ? (
+            <div>
+              <p className="text-[10px] uppercase tracking-widest text-gray-600 font-mono mb-1">Contenu du fichier exposé</p>
+              <EnvFileViewer content={envContent} />
+            </div>
+          ) : f.evidence ? (
             <div>
               <p className="text-[10px] uppercase tracking-widest text-gray-600 font-mono mb-1">Evidence</p>
-              <pre className="text-[11px] font-mono text-yellow-300 bg-gray-800/60 rounded px-3 py-2 whitespace-pre-wrap break-all">{f.evidence}</pre>
+              <pre className="text-[11px] font-mono text-yellow-300 bg-gray-800/60 rounded px-3 py-2 whitespace-pre-wrap break-all max-h-64 overflow-auto">{f.evidence}</pre>
             </div>
-          )}
+          ) : null}
           {f.remediation && (
             <div>
               <p className="text-[10px] uppercase tracking-widest text-gray-600 font-mono mb-1">Remédiation</p>

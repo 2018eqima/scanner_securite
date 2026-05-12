@@ -198,9 +198,15 @@ public class HttpFingerprintService {
 
                 // Report 200, 401, 403 as interesting (resource exists)
                 if (status[0] == 200 || status[0] == 401 || status[0] == 403) {
-                    String snippet = body[0].length() > 120 ? body[0].substring(0, 120) + "…" : body[0];
+                    // Capture full content for .env and config files, short snippet otherwise
+                    boolean isHighValue = path.contains(".env") || path.contains("config")
+                        || path.contains(".git") || path.contains("actuator")
+                        || path.contains("swagger") || path.contains("openapi")
+                        || path.contains("dump") || path.contains("backup");
+                    int limit = isHighValue ? 3000 : 200;
+                    String snippet = body[0].length() > limit ? body[0].substring(0, limit) + "\n…[tronqué]" : body[0];
                     found.add(new SensitiveFile(path, status[0], snippet));
-                    log.info("Sensitive file found: {} → HTTP {}", fullUrl, status[0]);
+                    log.info("Sensitive file found: {} → HTTP {} ({} chars)", fullUrl, status[0], snippet.length());
                 }
             } catch (Exception ignored) {}
         }

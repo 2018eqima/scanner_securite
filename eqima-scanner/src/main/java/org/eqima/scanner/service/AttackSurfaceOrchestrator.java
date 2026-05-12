@@ -374,11 +374,13 @@ public class AttackSurfaceOrchestrator {
             else if (sf.path().contains("swagger") || sf.path().contains("openapi") || sf.path().contains("graphql")) sev = "MEDIUM";
             else if (sf.path().contains("robots") || sf.path().contains("sitemap") || sf.path().contains("security.txt")) sev = "INFO";
 
+            String evidence = "HTTP " + sf.status() + " — " + sf.path()
+                + (sf.snippet().isEmpty() ? "" : "\n\n" + sf.snippet());
             saveFinding(jobId, host, "SENSITIVE_FILE",
                 "Fichier sensible accessible : " + sf.path() + " sur " + host,
                 "Le chemin " + sf.path() + " est accessible publiquement (HTTP " + sf.status() + "). Ce fichier peut exposer des secrets, configurations ou informations structurelles.",
                 sev,
-                "HTTP " + sf.status() + (sf.snippet().isEmpty() ? "" : " — Extrait : " + sf.snippet()),
+                evidence,
                 "Bloquer l'accès à ce fichier via le serveur web (deny all dans Nginx/Apache) ou le supprimer du document root.");
         }
     }
