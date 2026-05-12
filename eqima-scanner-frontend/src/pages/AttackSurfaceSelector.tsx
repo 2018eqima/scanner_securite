@@ -5,12 +5,14 @@ import { scanApi, SubdomainResult } from '../api/scans'
 import { ScanSession } from '../types'
 import {
   Crosshair, Loader, ChevronRight, Search, Globe,
-  CheckCircle, XCircle, Play, AlertTriangle, RefreshCw
+  CheckCircle, XCircle, Play, AlertTriangle, RefreshCw,
+  BookOpen, Eye, Radar, BarChart3, Settings, ChevronDown
 } from 'lucide-react'
 
 export function AttackSurfaceSelector() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [tab, setTab] = useState<'discovery' | 'roadmap'>('discovery')
   const [domain, setDomain] = useState('eqima.org')
   const [inputDomain, setInputDomain] = useState('eqima.org')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -87,7 +89,33 @@ export function AttackSurfaceSelector() {
         </div>
       </div>
 
-      <div className="flex-1 flex gap-0">
+      {/* Tabs */}
+      <div className="bg-gray-950 border-b border-gray-800 px-6 flex gap-1">
+        <button
+          onClick={() => setTab('discovery')}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            tab === 'discovery'
+              ? 'border-red-500 text-red-400'
+              : 'border-transparent text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          <Radar size={14} /> Découverte active
+        </button>
+        <button
+          onClick={() => setTab('roadmap')}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            tab === 'roadmap'
+              ? 'border-red-500 text-red-400'
+              : 'border-transparent text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          <BookOpen size={14} /> Spécifications &amp; Roadmap
+        </button>
+      </div>
+
+      {tab === 'roadmap' && <RoadmapView />}
+
+      {tab === 'discovery' && <div className="flex-1 flex gap-0">
         {/* Panneau gauche : découverte */}
         <div className="w-1/2 border-r border-gray-800 flex flex-col">
           <div className="px-6 py-4 border-b border-gray-800">
@@ -238,6 +266,219 @@ export function AttackSurfaceSelector() {
             )}
           </div>
         </div>
+      </div>}
+    </div>
+  )
+}
+
+// ── Roadmap / Spécifications ──────────────────────────────────────────────────
+
+type PhaseSection = { title: string; items: string[] }
+type Phase = { id: string; icon: React.ReactNode; label: string; color: string; sections: PhaseSection[] }
+
+const PHASES: Phase[] = [
+  {
+    id: 'phase1', icon: <Eye size={16}/>, label: 'Phase 1 — Reconnaissance passive', color: 'border-blue-700 bg-blue-950/20',
+    sections: [
+      { title: '1.1 DNS & Infrastructure', items: [
+        'Résolution DNS complète : A, AAAA, MX, NS, TXT, SOA, CNAME, PTR',
+        'Énumération de sous-domaines : brute-force via wordlist (SecLists DNS)',
+        'Certificate Transparency via crt.sh API (https://crt.sh/?q=%.{domain}&output=json)',
+        'Lookup DNSDumpster, SecurityTrails si clé API disponible',
+        'Détection de zone transfer (AXFR)',
+        'Analyse SPF/DKIM/DMARC (vecteurs de phishing/spoofing)',
+        'Reverse DNS sur toutes les IPs découvertes',
+      ]},
+      { title: '1.2 ASN & Ranges IP', items: [
+        'Lookup ASN via api.bgpview.io',
+        'Extraction des plages IP annoncées par l\'ASN cible',
+        'Identification des blocs CIDR appartenant à l\'organisation',
+      ]},
+      { title: '1.3 Certificate Transparency', items: [
+        'Extraction de tous les SANs des certificats TLS (crt.sh)',
+        'Détection de sous-domaines cachés dans les SANs',
+        'Analyse des certificats expirés ou mal configurés',
+      ]},
+      { title: '1.4 OSINT', items: [
+        'Recherche Google Dorks automatisée (site:, filetype:, inurl:)',
+        'Shodan API : ports, services, CVEs connues sur les IPs',
+        'Censys API : TLS, services exposés',
+        'Wayback Machine : URLs historiques (web.archive.org/cdx/search/cdx)',
+        'GitHub search : dépôts liés au domaine, secrets exposés',
+      ]},
+    ],
+  },
+  {
+    id: 'phase2', icon: <Radar size={16}/>, label: 'Phase 2 — Reconnaissance active', color: 'border-orange-700 bg-orange-950/20',
+    sections: [
+      { title: '2.1 Scan de ports & services', items: [
+        'Intégration OpenVAS : Discovery Scan sur toutes les IPs (Phase 1)',
+        'Via GVM API (GMP over TLS) : create_target → create_task → start_task → poll → get_reports',
+        'Ports standards + non standards (top 10 000)',
+        'Identification des services et versions (bannières)',
+        'Détection OS fingerprint',
+      ]},
+      { title: '2.2 Analyse TLS/SSL', items: [
+        'Version TLS supportée (TLS 1.0/1.1 = vulnérable)',
+        'Cipher suites faibles',
+        'Validité, chaîne de confiance, CN vs SANs',
+        'HSTS présent/absent, includeSubDomains, preload',
+      ]},
+      { title: '2.3 HTTP Fingerprinting', items: [
+        'Headers de sécurité : CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, HSTS',
+        'Cookies : Secure, HttpOnly, SameSite',
+        'Détection de technologies : X-Powered-By, Server, générateurs de meta',
+        'Wappalyzer-like fingerprinting sur les réponses HTTP',
+      ]},
+      { title: '2.4 Découverte d\'endpoints (crawl actif)', items: [
+        'Intégration OWASP ZAP : Spider classique + Ajax Spider pour SPA (React, Vue, Angular)',
+        'Via ZAP REST API : récupérer l\'arbre complet des URLs, méthodes, paramètres, codes de réponse',
+        'Fichiers sensibles : /.env, /.git/HEAD, /config.js, /backup.zip, /api/swagger.json, /openapi.yaml, /actuator, /actuator/env, /phpinfo.php, /adminer.php, /.DS_Store',
+        'Détection de directory listing',
+        'Endpoints API : /api/, /graphql, /v1/, /v2/, /rest/, /swagger-ui/, /redoc/',
+      ]},
+    ],
+  },
+  {
+    id: 'phase3', icon: <BarChart3 size={16}/>, label: 'Phase 3 — Analyse & Scoring', color: 'border-yellow-700 bg-yellow-950/20',
+    sections: [
+      { title: '3.1 Scoring par asset', items: [
+        'Ports dangereux exposés (22 public, 3389, 5432, 27017…) → score élevé',
+        'Fichiers sensibles accessibles → score critique',
+        'Headers de sécurité manquants → score moyen',
+        'TLS faible ou expiré → score élevé',
+        'Technologie avec CVE connue (via NVD API) → score variable selon CVSS',
+      ]},
+      { title: '3.2 Déduplication & corrélation', items: [
+        'Dédupliquer les URLs et endpoints inter-sources',
+        'Corréler : IP → sous-domaines → services → endpoints → technologies → CVEs',
+        'Construire un graphe d\'actifs (Asset Graph)',
+      ]},
+      { title: '3.3 Détection de surface d\'attaque prioritaire', items: [
+        'Formulaires sans CSRF token',
+        'Endpoints POST/PUT/DELETE sans authentification apparente',
+        'APIs exposant des données sans rate-limiting détectable',
+        'Endpoints anciens (Wayback) toujours actifs',
+      ]},
+    ],
+  },
+  {
+    id: 'phase4', icon: <Settings size={16}/>, label: 'Phase 4 — Orchestration & Architecture', color: 'border-green-700 bg-green-950/20',
+    sections: [
+      { title: 'Backend Spring Boot', items: [
+        'AttackSurfaceOrchestrator : service principal gérant le workflow par phases',
+        'Exécution parallèle Phase 1 via CompletableFuture',
+        'Phase 2 déclenchée après agrégation Phase 1',
+        'Polling asynchrone OpenVAS + ZAP (toutes les 30s)',
+        'Entités PostgreSQL : ScanJob, DiscoveredHost, DiscoveredEndpoint, SecurityHeader, TlsAnalysis, TechnologyFingerprint, SensitiveFile, RiskScore',
+        'REST : POST /api/scans, GET /api/scans/{id}, GET /api/scans/{id}/results, GET /api/scans/{id}/export',
+        'SSE : GET /api/scans/{id}/stream pour suivi temps réel',
+      ]},
+      { title: 'Intégration OpenVAS (GVM API)', items: [
+        'Connexion via socket TLS ou XML over TCP (port 9390)',
+        'Authentification GMP (<authenticate>)',
+        'Workflow : create_target → create_task → start_task → get_tasks (polling) → get_reports',
+        'Parser rapport XML GMP : hosts, ports, services, vulnérabilités',
+      ]},
+      { title: 'Intégration OWASP ZAP', items: [
+        'ZAP en mode daemon : zap.sh -daemon -port 8090 -config api.key=xxx',
+        'Spider : spider/scan → spider/status → spider/results',
+        'Ajax Spider : ajaxSpider/scan → ajaxSpider/status → ajaxSpider/results',
+        'Récupérer : core/urls, core/messages (paramètres et méthodes)',
+        'Scan passif automatique + récupération des alertes',
+      ]},
+      { title: 'Frontend React', items: [
+        'Vue "Scan en cours" : timeline des phases avec progression SSE temps réel',
+        'Asset Map : graphe interactif des assets (D3.js ou Cytoscape)',
+        'Tableau hosts avec ports/services',
+        'Tableau endpoints avec méthode, statut, score de risque, paramètres',
+        'Tableau findings : fichiers sensibles, headers manquants, TLS faibles',
+        'Scoring global avec breakdown par catégorie',
+        'Filtres : par sévérité, type d\'asset, phase de découverte',
+        'Export : JSON complet, rapport PDF exécutif',
+      ]},
+      { title: 'Contraintes techniques', items: [
+        'Toutes les clés API (Shodan, Censys, SecurityTrails) configurables via .env',
+        'Timeouts configurables par phase',
+        'Mode "passif uniquement" (sans contact cible) activable en option',
+        'Rate limiting sur les requêtes sortantes pour éviter le blocage IP',
+        'Logging structuré de toutes les requêtes sortantes (audit trail)',
+        'Keycloak : accès restreint au rôle SECURITY_ANALYST',
+        'OpenVAS image : registry.community.greenbone.net/community/gvmd:stable',
+        'ZAP image : ghcr.io/zaproxy/zaproxy:stable',
+      ]},
+    ],
+  },
+]
+
+function PhaseCard({ phase }: { phase: Phase }) {
+  const [open, setOpen] = useState(true)
+  return (
+    <div className={`border rounded-xl overflow-hidden ${phase.color}`}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-white/5 transition-colors"
+      >
+        <span className="text-gray-300">{phase.icon}</span>
+        <span className="font-bold text-sm text-white tracking-wide flex-1">{phase.label}</span>
+        <ChevronDown size={14} className={`text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="px-5 pb-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+          {phase.sections.map((sec, i) => (
+            <div key={i} className="bg-gray-900/50 rounded-lg p-4">
+              <p className="text-[10px] uppercase tracking-widest font-mono text-gray-500 mb-2">{sec.title}</p>
+              <ul className="space-y-1.5">
+                {sec.items.map((item, j) => (
+                  <li key={j} className="flex gap-2 text-xs text-gray-300">
+                    <span className="shrink-0 text-gray-600 mt-0.5">›</span>
+                    <span className="leading-relaxed font-mono">{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RoadmapView() {
+  return (
+    <div className="flex-1 overflow-auto px-6 py-6 max-w-7xl">
+      {/* Intro */}
+      <div className="mb-6 bg-gray-800/40 border border-gray-700 rounded-xl px-6 py-5">
+        <div className="flex items-start gap-3">
+          <BookOpen size={20} className="text-red-400 mt-0.5 shrink-0" />
+          <div>
+            <h2 className="text-white font-bold text-base mb-1">Attack Surface Discovery — Module v2</h2>
+            <p className="text-gray-400 text-sm leading-relaxed">
+              Moteur de découverte de surface d'attaque complet en 4 phases séquentielles et parallélisables.
+              Les résultats alimentent automatiquement <span className="text-cyan-400 font-mono">OpenVAS</span> (scan de vulnérabilités infrastructure)
+              et <span className="text-green-400 font-mono">OWASP ZAP</span> (crawl et analyse web).
+            </p>
+            <div className="flex gap-3 mt-3 flex-wrap">
+              {[
+                { label: 'Spring Boot 3.x', color: 'text-green-400 border-green-800 bg-green-950/30' },
+                { label: 'React / Vite', color: 'text-cyan-400 border-cyan-800 bg-cyan-950/30' },
+                { label: 'PostgreSQL 16', color: 'text-blue-400 border-blue-800 bg-blue-950/30' },
+                { label: 'Docker Compose', color: 'text-yellow-400 border-yellow-800 bg-yellow-950/30' },
+                { label: 'OpenVAS GVM', color: 'text-orange-400 border-orange-800 bg-orange-950/30' },
+                { label: 'OWASP ZAP', color: 'text-red-400 border-red-800 bg-red-950/30' },
+              ].map(t => (
+                <span key={t.label} className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase ${t.color}`}>
+                  {t.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Phases */}
+      <div className="space-y-4">
+        {PHASES.map(phase => <PhaseCard key={phase.id} phase={phase} />)}
       </div>
     </div>
   )
