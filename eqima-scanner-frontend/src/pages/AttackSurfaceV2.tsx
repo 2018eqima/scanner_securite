@@ -75,6 +75,41 @@ function SevBadge({ sev }: { sev: string }) {
   )
 }
 
+type Rating = { grade: string; label: string; desc: string; bg: string; border: string; text: string; bar: string }
+
+function getRating(score: number): Rating {
+  if (score === 0)   return { grade: 'A+', label: 'Excellent',  desc: 'Aucune vulnérabilité détectée',           bg: 'bg-emerald-950/60', border: 'border-emerald-500', text: 'text-emerald-400', bar: 'bg-emerald-500' }
+  if (score <= 30)   return { grade: 'A',  label: 'Très bon',   desc: 'Surface d\'attaque très faible',           bg: 'bg-green-950/60',   border: 'border-green-500',   text: 'text-green-400',   bar: 'bg-green-500'   }
+  if (score <= 80)   return { grade: 'B',  label: 'Bon',        desc: 'Quelques points d\'amélioration mineurs',  bg: 'bg-lime-950/60',    border: 'border-lime-500',    text: 'text-lime-400',    bar: 'bg-lime-500'    }
+  if (score <= 200)  return { grade: 'C',  label: 'Moyen',      desc: 'Risques modérés à corriger',               bg: 'bg-yellow-950/60',  border: 'border-yellow-500',  text: 'text-yellow-400',  bar: 'bg-yellow-500'  }
+  if (score <= 400)  return { grade: 'D',  label: 'Faible',     desc: 'Exposition significative',                 bg: 'bg-orange-950/60',  border: 'border-orange-500',  text: 'text-orange-400',  bar: 'bg-orange-500'  }
+  return               { grade: 'F',  label: 'Critique',   desc: 'Surface d\'attaque critique — action urgente', bg: 'bg-red-950/60',     border: 'border-red-500',     text: 'text-red-400',     bar: 'bg-red-500'     }
+}
+
+function RatingBadge({ score, size = 'lg' }: { score: number; size?: 'sm' | 'lg' }) {
+  const r = getRating(score)
+  if (size === 'sm') return (
+    <span className={`inline-flex items-center justify-center w-6 h-6 rounded font-bold text-xs border ${r.border} ${r.text} bg-gray-900`}>
+      {r.grade}
+    </span>
+  )
+  return (
+    <div className={`flex items-center gap-5 border rounded-xl px-6 py-4 ${r.bg} ${r.border}`}>
+      <div className={`text-5xl font-black font-mono ${r.text} leading-none`}>{r.grade}</div>
+      <div className="flex-1">
+        <div className="flex items-center gap-3 mb-2">
+          <span className={`text-base font-bold ${r.text}`}>{r.label}</span>
+          <span className="text-xs text-gray-500 font-mono">score {score}/1000</span>
+        </div>
+        <p className="text-xs text-gray-400 mb-2">{r.desc}</p>
+        <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden w-full">
+          <div className={`h-full rounded-full transition-all ${r.bar}`} style={{ width: `${Math.min(score / 10, 100)}%` }}/>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ScoreGauge({ score }: { score: number }) {
   const pct = Math.min(score / 10, 100)
   const color = score > 400 ? 'bg-red-500' : score > 200 ? 'bg-orange-500' : score > 80 ? 'bg-yellow-500' : 'bg-green-500'
@@ -292,16 +327,19 @@ export function AttackSurfaceV2() {
                 onClick={() => setJobId(j.id)}
                 className={`w-full text-left px-4 py-2.5 border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors ${jobId === j.id ? 'bg-gray-800/50 border-l-2 border-l-red-600' : ''}`}
               >
-                <p className="text-xs text-gray-200 font-mono truncate">{j.domain}</p>
-                <div className="flex items-center gap-2 mt-0.5">
+                <div className="flex items-center gap-2">
+                  {j.status === 'DONE' && <RatingBadge score={j.riskScore} size="sm" />}
+                  <p className="text-xs text-gray-200 font-mono truncate flex-1">{j.domain}</p>
+                </div>
+                <div className="flex items-center gap-2 mt-0.5 ml-8">
                   <span className={`text-[10px] font-mono ${j.status === 'DONE' ? 'text-green-400' : j.status === 'FAILED' ? 'text-red-400' : 'text-yellow-400'}`}>
                     {j.status}
                   </span>
                   {j.findingCount > 0 && (
                     <span className="text-[10px] text-orange-400">{j.findingCount} findings</span>
                   )}
-                  {j.riskScore > 0 && (
-                    <span className="text-[10px] text-gray-600">score {j.riskScore}</span>
+                  {j.status === 'DONE' && (
+                    <span className="text-[10px] text-gray-600">{getRating(j.riskScore).label}</span>
                   )}
                 </div>
               </button>
@@ -332,13 +370,15 @@ export function AttackSurfaceV2() {
           {job?.status === 'DONE' && results && (
             <div className="p-6 space-y-6">
 
+              {/* Security Rating */}
+              <RatingBadge score={job.riskScore} />
+
               {/* Summary */}
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 {[
-                  { label: 'Assets découverts', value: job.assetCount, color: 'text-cyan-400' },
-                  { label: 'Findings',           value: job.findingCount, color: 'text-orange-400' },
-                  { label: 'Sous-domaines',      value: subdomains.length, color: 'text-green-400' },
-                  { label: 'Score de risque',    value: job.riskScore, color: job.riskScore > 400 ? 'text-red-400' : job.riskScore > 200 ? 'text-orange-400' : 'text-yellow-400' },
+                  { label: 'Assets découverts', value: job.assetCount,    color: 'text-cyan-400'   },
+                  { label: 'Findings',           value: job.findingCount,  color: 'text-orange-400' },
+                  { label: 'Sous-domaines',      value: subdomains.length, color: 'text-green-400'  },
                 ].map(s => (
                   <div key={s.label} className="bg-gray-800/40 border border-gray-700 rounded-lg px-4 py-3">
                     <p className={`text-2xl font-bold font-mono ${s.color}`}>{s.value}</p>
@@ -346,8 +386,6 @@ export function AttackSurfaceV2() {
                   </div>
                 ))}
               </div>
-
-              <ScoreGauge score={job.riskScore} />
 
               {/* Findings by severity */}
               <div>
