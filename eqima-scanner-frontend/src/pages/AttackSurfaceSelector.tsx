@@ -6,13 +6,14 @@ import { ScanSession } from '../types'
 import {
   Crosshair, Loader, ChevronRight, Search, Globe,
   CheckCircle, XCircle, Play, AlertTriangle, RefreshCw,
-  BookOpen, Eye, Radar, BarChart3, Settings, ChevronDown
+  BookOpen, Eye, Radar, BarChart3, Settings, ChevronDown, Zap
 } from 'lucide-react'
+import { AttackSurfaceV2 } from './AttackSurfaceV2'
 
 export function AttackSurfaceSelector() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [tab, setTab] = useState<'discovery' | 'roadmap'>('discovery')
+  const [tab, setTab] = useState<'discovery' | 'v2' | 'roadmap'>('v2')
   const [domain, setDomain] = useState('eqima.org')
   const [inputDomain, setInputDomain] = useState('eqima.org')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -102,6 +103,16 @@ export function AttackSurfaceSelector() {
           <Radar size={14} /> Découverte active
         </button>
         <button
+          onClick={() => setTab('v2')}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            tab === 'v2'
+              ? 'border-red-500 text-red-400'
+              : 'border-transparent text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          <Zap size={14} /> Scan complet v2
+        </button>
+        <button
           onClick={() => setTab('roadmap')}
           className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
             tab === 'roadmap'
@@ -113,6 +124,7 @@ export function AttackSurfaceSelector() {
         </button>
       </div>
 
+      {tab === 'v2' && <AttackSurfaceV2 />}
       {tab === 'roadmap' && <RoadmapView />}
 
       {tab === 'discovery' && <div className="flex-1 flex gap-0">
